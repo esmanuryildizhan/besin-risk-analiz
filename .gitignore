@@ -1,23 +1,67 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
+# ---------------------------------------------------------------------------
+# Bağımlılıklar — HER düzeyde yok sayılır.
+# ÖNEMLİ: eski hâli "/node_modules" yazıyordu ve baştaki bölü yüzünden YALNIZCA
+# kök klasörü kapsıyordu; backend/node_modules (190 MB) açıkta kalıyordu.
+# Sondaki bölü + baştaki bölünün olmaması, her alt klasörde eşleşmesini sağlar.
+# ---------------------------------------------------------------------------
+node_modules/
 /.pnp
 .pnp.js
 
-# testing
-/coverage
+# ---------------------------------------------------------------------------
+# Python sanal ortamı ve önbelleği.
+# .venv 223 MB ve depoya girmemeli: makineye özel, `python -m venv .venv` ile
+# yeniden kurulur. (Not: data-import betikleri yalnızca standart kütüphane
+# kullanıyor, yani sanal ortam olmadan da çalışırlar.)
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
 
-# production
-/build
-
-# misc
-.DS_Store
+# ---------------------------------------------------------------------------
+# GİZLİ BİLGİ — asla depoya girmemeli.
+# backend/.env içinde JWT_SECRET ve veritabanı bağlantısı var.
+# Baştaki bölü olmadığı için bu kalıp her düzeydeki .env dosyasını kapsar.
+# ---------------------------------------------------------------------------
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
+# ---------------------------------------------------------------------------
+# Üretilen çıktılar
+# ---------------------------------------------------------------------------
+/build
+/coverage
+/src/generated/prisma
+
+# ---------------------------------------------------------------------------
+# Prisma CLI'ın kurduğu yapay zekâ ajanı dokümanları (69 dosya).
+# Uygulamayı çalıştırmak için gerekmiyor, Prisma yeniden kurabiliyor.
+# Depoda tutmak istersen bu iki satırı sil.
+# ---------------------------------------------------------------------------
+backend/.agents/
+skills-lock.json
+# Aynı dokümanlara işaret eden sembolik bağlantılar. .agents yok sayıldığı için
+# bunlar depoda KIRIK bağlantı olarak görünürdü.
+backend/.claude/
+backend/.windsurf/
+
+# ---------------------------------------------------------------------------
+# İşletim sistemi / editör
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# ---------------------------------------------------------------------------
+# Üretilen iç çalışma listesi. `python yapilacaklar_uret.py` her çalıştığında
+# yeniden üretiliyor, elle düzenlenmiyor ve yalnızca veri girerken işe yarıyor.
+# Depoda durması gereksiz; veri hattının nasıl işlediği data-import/README.md
+# ve VERI_GIRISLERI.md dosyalarında anlatılıyor.
+# ---------------------------------------------------------------------------
+data-import/YAPILACAKLAR.md

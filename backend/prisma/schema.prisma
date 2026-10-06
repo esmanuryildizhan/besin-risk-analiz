@@ -1,0 +1,277 @@
+// Besin Risk Analiz Sistemi - veritabanı şeması
+// Veri kaynağı: TürKomp, Ulusal Gıda Kompozisyon Veri Tabanı v1.0
+// https://turkomp.tarimorman.gov.tr/
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  surname      String
+  email        String   @unique
+  passwordHash String
+  gender       String?
+  diet         String?
+
+  // GÜNLÜK HEDEFLER — kullanıcının kendi kararı.
+  // Boş bırakılırsa arayüz varsayılan gösteriyor (2000 kcal / 2 L). Bilerek
+  // hesaplamıyoruz: boy-kilo-yaştan günlük ihtiyaç tahmin etmek bir sağlık
+  // tahminidir ve bu uygulama tıbbi tavsiye vermiyor. Kullanıcı kendi hedefini
+  // yazar, biz yalnızca ona göre doluluk gösteririz.
+  kcalGoal     Int?
+  waterGoalL   Float?
+
+  // KVKK ONAY KAYDI
+  // Niye tarih + sürüm birlikte: "onay verdi mi" yetmiyor, "NE ZAMAN ve HANGİ
+  // METNE" sorusunun da cevabı gerekiyor. Metin değişip sürüm artarsa mevcut
+  // kullanıcıdan yeniden onay isteniyor (src/kvkk_metinleri.js).
+  // Aydınlatma ve açık rıza AYRI iki alan: KVKK Kurulu'nun 2026/347 sayılı
+  // ilke kararı ikisini ayrı tutmayı zorunlu kılıyor — aydınlatma bir onay
+  // değil bilgilendirmedir, beyanı "okudum ve anladım"dır.
+  aydinlatmaOkunduAt DateTime?
+  acikRizaAt         DateTime?
+  rizaSurumu         String?
+
+  createdAt    DateTime @default(now())
+
+  allergies    UserAllergy[]
+  diseases     UserDisease[]
+  diaryEntries DiaryEntry[]
+  diaryDays    DiaryDay[]
+  labResults   LabResult[]
+}
+
+model UserAllergy {
+  id     Int    @id @default(autoincrement())
+  name   String // "gluten", "milk", "eggs", "peanuts", ... (Food.allergens ile aynı anahtarlar)
+  userId Int
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model UserDisease {
+  id     Int    @id @default(autoincrement())
+  name   String // "diyabet", "hipertansiyon", "kansizlik", "colyak", "kolesterol", ...
+  userId Int
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+/// Genel besinler (markasız): pırasa, muz, mercimek, yoğurt...
+/// Bütün besin değerleri 100 GRAM içindir. Bilinmeyen değer null kalır, 0 yazılmaz.
+model Food {
+  id            Int     @id @default(autoincrement())
+  /// Kaynak + kimlik: "turkomp:pekmez".
+  /// Aynı besin iki kez eklenmesin diye benzersiz.
+  externalId    String  @unique
+  name          String // Türkçe ad ("Pırasa")
+  nameEn        String // Kaynaktaki orijinal ad ("Leeks, (bulb and lower leaf-portion), raw")
+  category      String // Sebze, Meyve, Tahıl, Et-Balık, ...
+  icon          String?
+
+  // Tipik porsiyon: kullanıcı 100 g değil "1 orta boy muz" yer
+  portionName   String // "1 orta boy"
+  portionGrams  Float // 118
+
+  // --- Makro besinler (g) ---
+  kcal          Float
+  proteins      Float
+  carbohydrates Float
+  sugars        Float?
+  fiber         Float?
+  fat           Float
+  saturatedFat  Float?
+  transFat      Float?
+  // ÖLÇÜLEN tekli/çoklu doymamış yağ asidi toplamları (TürKomp her sayfada
+  // "Yağ asitleri, toplam tekli doymamış" ve "...toplam çoklu doymamış" diye
+  // veriyor). Niye eklendi: doymamış yağ oranı eskiden (yağ - doymuş)/yağ ile
+  // TAHMİN ediliyordu ve bu oranı FAZLA gösteriyordu — toplam yağ, yağ asidi
+  // olmayan kütleyi (gliserol) de içeriyor, üstüne trans yağ da "doymuş değil"
+  // sayılıyordu. Fazla tahmin, doymuş yağ uyarısından muafiyeti hak etmeyen
+  // besne verebiliyordu; yani yanlış yön. Ölçüm varsa o kullanılıyor.
+  monounsaturatedFat Float?
+  polyunsaturatedFat Float?
+  // Uzun zincirli omega-3 yağ asitleri, GRAM/100 g (TürKomp'un birimi).
+  // TürKomp balık sayfalarında "Yağ asidi 20:5 n-3 all-cis" (EPA) ve
+  // "Yağ asidi 22:6 n-3 all-cis" (DHA) satırlarında veriliyor.
+  // Niye eklendi: balığın tek olumlu tarafı hiç temsil edilmiyordu; lüfer
+  // kolesterolde yalnızca doymuş yağ uyarısıyla görünüyor, hiçbir fayda
+  // almıyordu. Oysa projenin temel fikri bir besnin aynı hastalıkta hem
+  // uyarı hem fayda verebilmesi.
+  epa                Float?
+  dha                Float?
+
+  /// Glisemik indeks (TürKomp "Glisemik İndeks" satırı, 0-100).
+  /// Diyabet kuralı bununla GERÇEK glisemik yükü hesaplıyor:
+  ///   glisemik yük = glisemik indeks x porsiyondaki net karbonhidrat / 100
+  /// Boşsa motor eski yöntemi kullanır: glisemik indeks en fazla 100
+  /// olabileceğinden net karbonhidratın kendisi bir üst sınırdır.
+  /// USDA bu değeri hiç raporlamıyordu; TürKomp'a geçmenin kazancı.
+  glycemicIndex Float?
+
+  // --- Mineraller ve diğerleri (mg) ---
+  cholesterolMg Float?
+  sodiumMg      Float?
+  potassiumMg   Float?
+  calciumMg     Float?
+  ironMg        Float?
+  magnesiumMg   Float?
+  phosphorusMg  Float?
+  zincMg        Float?
+  vitaminCMg    Float?
+  caffeineMg    Float?
+
+  // --- Vitaminler (mikrogram) ---
+  vitaminDUg    Float?
+  vitaminKUg    Float? // kan sulandırıcı (varfarin) kullananlar için önemli
+  folateUg      Float?
+  vitaminB12Ug  Float?
+
+  // --- Alerjenler: tipik tarife göre. ["gluten", "milk"] ---
+  allergens     String[]
+  traces        String[] // eser miktarda bulunma ihtimali (ör. yulafta gluten)
+
+  /// Diyet etiketleri: "et", "balik", "deniz", "yumurta", "sut", "bal"
+  /// Vejetaryen/vegan kontrolü bunlara göre yapılır (kategoriye göre değil:
+  /// yumurta "Et-Balık" kategorisinde ama vejetaryenler yumurta yiyebilir).
+  dietTags      String[]
+
+  /// Verinin kaynağı; arayüzde besin detayında gösteriliyor (TürKomp için atıf zorunlu)
+  source        String
+
+  diaryEntries  DiaryEntry[]
+
+  @@index([category])
+  @@index([name])
+}
+
+/// Hastalıklar ve kuralları veritabanında duruyor ki kod değiştirmeden
+/// yeni kural eklenebilsin (Prisma Studio'dan bile düzenlenebilir).
+model Disease {
+  id        Int     @id @default(autoincrement())
+  key       String  @unique // "diyabet", "hipertansiyon", ...
+  name      String
+  icon      String?
+  note      String?
+  /// false ise: elimizdeki veriyle otomatik değerlendirilemiyor (IBS, gut gibi)
+  evaluable Boolean @default(true)
+
+  rules     DiseaseRule[]
+}
+
+model DiseaseRule {
+  id         Int     @id @default(autoincrement())
+  diseaseKey String
+  disease    Disease @relation(fields: [diseaseKey], references: [key], onDelete: Cascade)
+
+  nutrient   String?  // "sugars", "sodiumMg", "ironMg", ... (yoksa sadece kategoriye bakılır)
+  op         String?  // ">", ">=", "<", "<="
+  threshold  Float?
+  /// Doluysa kural sadece bu kategorilerde çalışır (ör. ["Hazır Gıda"])
+  categories String[]
+  basis      String @default("100g") // "100g" | "porsiyon"
+  level      String // "RISKLI" | "DIKKAT" | "ONERILIR"
+  message    String
+  /// true ise: bu değer besinde yoksa "uygun" denmez, DİKKAT verilir
+  critical   Boolean @default(false)
+  /// Eşiğin kaynağı: hastalik_kurallari.js içindeki KAYNAKLAR tablosunun anahtarı
+  /// (ör. "FSA2016", "EVERT2019"). "TAKDIR" = hiçbir makaleye dayanmıyor.
+  source     String?
+  /// Sayının makalede NEREDE geçtiği + günlük sınırı porsiyona çevirirken
+  /// yaptığımız varsayım. Arayüzde "neden?" açıklaması olarak gösterilir.
+  sourceNote String?
+  /// FSA kılavuzunun kendi kuralı (Annex 3, s.19): porsiyon başına kırmızı
+  /// sınırlar yalnızca porsiyonu 100 g'dan büyük ürünlerde uygulanır.
+  onlyLargePortion Boolean @default(false)
+  /// Lif yoğunluğu muafiyeti (g/1000 kcal). Besnin lif yoğunluğu bu değerin
+  /// üstündeyse kural atlanır — Evert 2019 (s.736) kuru baklagilleri, tam
+  /// taneli tahılları ve sebzeleri diyabette açıkça önerdiği için.
+  exemptFiberDensity Float?
+  /// Doymamış yağ oranı muafiyeti (%). Johnson 2023'te doymuş yağı AZALTMA
+  /// önerisi zayıf (GRADE 2), doymamışla DEĞİŞTİRME önerisi güçlü (GRADE 1).
+  exemptUnsaturatedPct Float?
+  /// true ise: besnin glisemik indeksi ölçülmüşse bu kural atlanır. Net
+  /// karbonhidrat eşiği glisemik yükü tahmin eden bir vekil; gerçek değer
+  /// varsa vekile gerek yok ve ikisi birlikte çift uyarı verir.
+  exemptIfGlycemicLoadKnown Boolean @default(false)
+  sortOrder  Int    @default(0)
+
+  @@index([diseaseKey])
+}
+
+// Bir öğüne eklenen TEK kalem. İki giriş biçimi var ve ikisi de aynı tabloda:
+//
+//   (a) BESİN SEÇEREK  -> foodId + amount (gram) dolu. Kalori veri tabanındaki
+//       besinden hesaplanır. Bu biçimde o gün yenenler risk motorundan da
+//       geçirilebiliyor ("bugün 3 riskli besin yedin").
+//   (b) SERBEST GİRİŞ  -> label + kcal dolu, foodId boş. Dışarıda yenen,
+//       veri tabanında olmayan bir yemek için.
+//
+// kcal HER İKİ DURUMDA da saklanıyor. Besin seçildiğinde de hesaplanıp
+// yazılıyor; sonradan hesaplanmıyor. Sebebi: günlük bir GEÇMİŞ KAYDI. TürKomp
+// değeri ileride düzeltilirse geçmiş günlerin kalorisi değişmemeli, kullanıcı
+// o gün ne yediyse o kalmalı.
+model DiaryEntry {
+  id       Int      @id @default(autoincrement())
+  date     DateTime @db.Date
+  mealType String // "kahvalti" | "ogle" | "aksam" | "ara"
+
+  foodId   Int?
+  food     Food?    @relation(fields: [foodId], references: [id])
+  amount   Float? // gram — yalnızca besin seçildiğinde
+  label    String? // serbest girişin adı ("Dışarıda pide")
+  kcal     Float // giriş anında hesaplanan/yazılan kalori
+
+  userId   Int
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, date])
+}
+
+// Öğüne bağlı OLMAYAN günlük değerler: yakılan kalori ve su.
+// Ayrı tablo çünkü bunlar öğün kalemi değil, günün toplamı. Kullanıcı başına
+// gün başına tek satır.
+model DiaryDay {
+  id         Int      @id @default(autoincrement())
+  date       DateTime @db.Date
+  burnedKcal Float    @default(0)
+  waterL     Float    @default(0)
+
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+}
+
+// Bir tahlil sonucu. Değerler kullanıcının PDF'inden geliyor ve YORUM DA
+// PDF'ten geliyor: eşik olarak laboratuvarın kendi referans aralığı ve
+// kendi sınıflaması kullanılıyor, bizim koyduğumuz bir eşik yok.
+// (Karar: 3 Ekim 2026 — bkz. claude/tahlil-ve-makine-ogrenmesi-karari.md)
+model LabResult {
+  id       Int      @id @default(autoincrement())
+  testName String
+  value    Float?  // sayı okunamadıysa (ör. "O Rh(+)") boş, textValue dolu
+  unit     String?
+  refLow   Float?
+  refHigh  Float?
+  testDate DateTime
+
+  // "< 0,5" gibi sonuçlarda işleç ayrı tutuluyor: 0,5 ile "0,5'ten küçük"
+  // aynı şey değil ve kural yazarken ayrımı gerekiyor.
+  valueOp   String?
+  textValue String? // sayı olmayan sonuç ("O Rh(+)")
+
+  // PDF'in kendi sınıflaması. Laboratuvar bazı testlerde tek aralık yerine
+  // kademe veriyor ("Optimum", "Sınırda yüksek", "Orta derecede risk") ve o
+  // kademe tek bir alt/üst sınırdan daha çok şey söylüyor.
+  pdfYorumu String? // "düşük" | "normal" | "yüksek" | "Orta derecede risk" ...
+  pdfAralik String? // yorumun dayandığı aralık, olduğu gibi ("45-65", "<100")
+
+  userId   Int
+  user     User     @relation(fields: [userId], references: [id])
+}

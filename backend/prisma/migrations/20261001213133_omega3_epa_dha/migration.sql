@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Food" ADD COLUMN     "dha" DOUBLE PRECISION,
+ADD COLUMN     "epa" DOUBLE PRECISION,
+ADD COLUMN     "monounsaturatedFat" DOUBLE PRECISION,
+ADD COLUMN     "polyunsaturatedFat" DOUBLE PRECISION;

@@ -1,70 +1,194 @@
-# Getting Started with Create React App
+# Besin Risk Analiz Sistemi
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Kişinin hastalıklarına, alerjilerine ve kan tahlili sonuçlarına göre besinleri
+değerlendiren web uygulaması. Bir besin açılınca "sizin için UYGUN / DİKKAT /
+RİSKLİ" der ve **neden** öyle dediğini, hangi eşiğe ve hangi kaynağa
+dayandığıyla birlikte yazar.
 
-## Available Scripts
+## Projenin kuralı
 
-In the project directory, you can run:
+> Hiçbir sayı uydurulmaz. Her eşik gerçek bir kaynağa dayanır ve o kaynak
+> kullanıcıya gösterilir. Bizim yaptığımız her çevrim "bize ait" diye
+> etiketlenir.
 
-### `npm start`
+Bu, projenin süsü değil mimarisi. Pratik sonuçları:
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **43 kural, 31 kaynak künyesi, kaynaksız eşik yok.** Bir test bunu denetliyor:
+  kaynağı olmayan bir eşik eklenirse test patlar.
+- Kaynak künyeleri **sayfa/tablo numarası** taşır, yalnızca "EFSA 2015" değil
+  "EFSA Journal 13(10):4254, özet s.1".
+- Veri eksikse kural **sessiz kalmaz, DİKKAT der.** Kritik bir besin değeri
+  boş olan besin UYGUN sayılamaz.
+- Çıkarımın hangi **yönünün** sağlam olduğu her yerde ayrıca yazılı. Örnek:
+  TürKomp toplam trans yağı değil yalnızca elaidik asidi ölçüyor, yani
+  değerimiz bir **alt sınır** — kuralın tetiklenmesi haklı, sessiz kalması
+  "temiz" demek değil. Kural bu yüzden RİSKLİ değil DİKKAT veriyor.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Kuralların tam listesi ve dayanakları: [`KURAL_KAYNAKLARI.md`](KURAL_KAYNAKLARI.md)
+(`backend/prisma/belge_uret.js` üretiyor, elle düzenlenmez).
 
-### `npm test`
+## Ekranlar
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+| Ekran | Ne yapar |
+|---|---|
+| **Besinler** | Besin arama, risk seviyesi, besin kartında gerekçeler ve kaynaklar |
+| **Günlük Takip** | Alınan/yakılan kalori, net kalori, su; takvimden geçmiş günler; porsiyon adedi |
+| **Tahlil Sonuçlarım** | e-Nabız PDF'i yükle → değerleri oku → onayla → kaydet; tarihler arası karşılaştırma |
+| **Profil** | Hastalıklar, alerjiler, diyet tercihi, günlük hedefler |
 
-### `npm run build`
+Tahlilde düşük çıkan bir değer varsa, ilgili besin ögesi besin kartında ayrı bir
+**"Tahlilinize göre"** bölümünde görünür. Bu bölüm risk seviyesini
+**değiştirmez** ve teşhis koymaz.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Veri kaynağı
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Besin değerlerinin tek kaynağı **[TürKomp](https://turkomp.tarimorman.gov.tr/)**
+(Ulusal Gıda Kompozisyon Veri Tabanı). **155 besin, tamamı TürKomp.**
+Her besnin TürKomp gıda kodu `data-import/turkomp_besinler.csv` içinde saklı;
+uygulamada besin kartında kaynak ve bağlantı gösteriliyor.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+TürKomp'un ölçmediği ve dışarıdan giren tek değer **kafein**
+(EFSA NDA Paneli 2015, Tablo 1, s.15). Gerekçesi ve her bir sayının nereden
+geldiği: `data-import/VERI_GIRISLERI.md`.
 
-### `npm run eject`
+### Bilinen veri boşlukları
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Dürüstlük gereği burada duruyor; hiçbiri uydurularak kapatılmadı:
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- **Glisemik indeks hiçbir besinde yok.** Motor hazır (glisemik yük hesabı
+  yazılı), veri bekliyor. O yüzden diyabet tarafında net karbonhidrat üst sınır
+  olarak kullanılıyor.
+- **Trans yağ = elaidik asit**, yani alt sınır (yukarıda anlatıldı).
+- **51 besinde kritik bir değer boş** (şeker 32, doymuş yağ 27, sodyum 12).
+  Çoğu TürKomp’ta hiç ölçülmemiş — veri girerek kapanmaz.
+- **Doymamış yağ ölçümü 155 besnin 20’sinde var.** Ölçümü olmayan besin
+  muafiyet almıyor; oran tahmin edilmiyor.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Bir kuralın "veri bekliyor" olması testlerde körleştirilmiyor: C26 testi bir
+kuralı ancak dayandığı veri **tüm veri tabanında** boşsa muaf tutuyor. Veri
+girildiği an kural tetiklenmek zorunda, yoksa test patlıyor.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## Kurulum
 
-## Learn More
+Gerekenler: **Node.js 18+**, **PostgreSQL**.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```bash
+git clone <depo-adresi>
+cd besin-risk-analiz
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### 1. Backend
 
-### Code Splitting
+```bash
+cd backend
+npm install
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+`backend/.env` dosyasını oluştur (depoya girmez):
 
-### Analyzing the Bundle Size
+```
+DATABASE_URL="postgresql://kullanici:parola@localhost:5432/besin_risk"
+JWT_SECRET="uzun-ve-rastgele-bir-dize"
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+Veritabanını kur ve doldur:
 
-### Making a Progressive Web App
+```bash
+npx prisma migrate dev
+npx prisma db seed
+npm start            # http://localhost:3001
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+`db seed`, `data-import/foods_tr.csv` dosyasındaki besinleri ve
+`backend/prisma/hastalik_kurallari.js` içindeki kuralları veritabanına yazar.
 
-### Advanced Configuration
+### 2. Arayüz
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+Yeni bir terminalde, proje kökünde:
 
-### Deployment
+```bash
+npm install
+npm start            # http://localhost:3000
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+API adresi mutlak (`localhost:3001`) ve CORS açık, yani arayüz başka bir porta
+düşse de çalışır.
 
-### `npm run build` fails to minify
+## Testler
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```bash
+cd backend
+npm test             # node src/risk_test.js
+```
+
+**121 test.** Veritabanına bağlanmaz, tamamen bellekte çalışır. Besin değerleri
+testlere elle yazılmaz, `data-import/foods_tr.csv` dosyasından okunur — veri
+değişirse test de değişir, sessizce kaymaz.
+
+Gruplar: 61 nokta testi, A (veri bütünlüğü), B (kural künyeleri), C (motor
+mekaniği). Ayrıntı: `claude/test-mimarisi.md`.
+
+## Teknolojiler
+
+**Backend:** Node.js, Express 5, PostgreSQL, Prisma 5.22 (bilerek sabitlendi),
+pdfjs-dist 4.10 (e-Nabız PDF ayrıştırma), bcryptjs, jsonwebtoken
+**Arayüz:** React 18, Tailwind CSS, lucide-react
+**Veri hazırlama:** Python (yalnızca standart kütüphane)
+
+## Proje yapısı
+
+```
+backend/
+  src/
+    index.js            # Express API (22 uç nokta)
+    risk.js             # Risk motoru — kuralları besne uygular
+    kural_cevir.js      # Veritabanı satırı <-> motor kuralı çevirisi (tek yer)
+    tahlil_ayristir.js  # e-Nabız PDF'ini koordinat tabanlı okur
+    risk_test.js        # 121 test
+  prisma/
+    schema.prisma       # 9 model
+    hastalik_kurallari.js  # Kurallar ve kaynak künyeleri — verinin kendisi
+    seed.js             # CSV + kurallar -> veritabanı
+    belge_uret.js       # KURAL_KAYNAKLARI.md üretir
+    kural_denetle.js    # Veritabanı kuralları dosyayla uyuşuyor mu (salt okunur)
+    besin_denetle.js    # Tek bir besni her hastalık için değerlendirir
+data-import/
+  turkomp_besinler.csv  # Ham TürKomp verisi (gıda kodlarıyla)
+  turkomp_birlestir.py  # Ana betik -> foods_tr.csv
+  bos_hucre_doldur.py   # Yapıştırılan sayfalardan BOŞ hücreleri doldurur
+  yapilacaklar_uret.py  # YAPILACAKLAR.md üretir
+  foods_tr.csv          # Uygulamanın okuduğu besin tablosu
+src/
+  App.js                # Kök: oturum, yönlendirme, KVKK onay kapısı (61 satır)
+  api.js                # Backend ile konuşan tek dosya
+  components/
+    ortak.js            # Modal, SecimKutusu, HataKutusu, risk stilleri
+    Sidebar.js
+  screens/
+    LoginScreen.js
+    RegisterScreen.js
+    BesinlerScreen.js   # arama, besin kartı, besin detayı
+    DiaryScreen.js      # günlük kalori, su, takvim
+    LabResultsScreen.js # PDF yükleme, karşılaştırma, öneriler
+    ProfileScreen.js
+  kvkk/
+    KvkkBilesenleri.js  # aydınlatma/açık rıza arayüzü, hesap silme
+```
+
+## Mimari notu — kurallar veri, kod değil
+
+Hastalık kuralları `hastalik_kurallari.js` içinde **veri** olarak duruyor,
+oradan veritabanına yazılıyor, API önbelleğe alıyor, `risk.js` çalıştırıyor.
+Yeni bir kural eklemek için motora dokunmak gerekmiyor — eşiği, seviyeyi ve
+kaynağını yazmak yeterli.
+
+Motorun bildiği türetilmiş değerler (`risk.js`): net karbonhidrat, 1000 kcal
+başına lif, doymuş yağın enerjiye oranı, doymamış yağ oranı, glisemik yük,
+EPA+DHA.
+
+## Uyarı
+
+Bu uygulama bilgilendirme amaçlıdır. **Tıbbi tanı veya tedavi yerine geçmez.**
+Tahlil ekranı sonuçlarınızı laboratuvarınızın kendi referans aralığına göre
+gösterir, teşhis koymaz ve hastalık profilinizi değiştirmez. Sağlık
+sorunlarınız için hekiminize başvurun.
