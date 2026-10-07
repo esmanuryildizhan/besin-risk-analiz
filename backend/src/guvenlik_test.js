@@ -19,6 +19,8 @@ const gunluk = require('./gunluk');
 const oturum = require('./oturum');
 const ayristirici = require('./tahlil_ayristir');
 const saklama = require('./saklama');
+const eposta = require('./eposta');
+const kvkk = require('./kvkk_metinleri');
 
 let gecen = 0;
 const kalan = [];
@@ -673,6 +675,165 @@ test('G57 Hiç giriş yapmamışta kayıt tarihi esas alınıyor', () => {
   const hic = { createdAt: new Date(Date.now() - 5 * GUN), sonGirisAt: null, silmeUyarisiAt: null };
   const gun = saklama.hareketsizGun(hic);
   dogru(gun > 4.9 && gun < 5.1, `kayıt tarihi esas alınmadı (${gun})`);
+});
+
+// --- Posta yapılandırma teşhisi (G58-G63) ----------------------------------
+//
+// Niye güvenlik testi: posta sessizce durduğunda kimse hesabını DOĞRULAYAMIYOR
+// ve kimse şifresini SIFIRLAYAMIYOR. Kullanıcı ekranda "bağlantı gönderildi"
+// görüyor, posta hiç gelmiyor. Yani yanlış teşhis doğrudan erişim kaybı.
+//
+// Bu testler yoluCoz()'u saf olarak çağırıyor; process.env'e dokunmuyorlar.
+
+test('G58 Brevo anahtarı + gönderen -> brevo yolu', () => {
+  const k = eposta.yoluCoz({ brevoAnahtar: 'x', gonderenAcik: 'a@b.com' });
+  esit(k.yontem, 'brevo', 'brevo yolu seçilmedi');
+  esit(k.eksik, null, 'yol varken eksik bildirildi');
+});
+
+test('G59 Brevo, SMTP ayarları da varken TERCİH EDİLİYOR', () => {
+  // Render ücretsiz katmanı 25/465/587 portlarını engelliyor. SMTP ayarları
+  // .env'de kalmış olabilir; o zaman SMTP seçilirse posta yine gitmez.
+  const k = eposta.yoluCoz({
+    brevoAnahtar: 'x', gonderenAcik: 'a@b.com', kullanici: 'c@d.com', sifre: 'abcdefghijklmnop',
+  });
+  esit(k.yontem, 'brevo', 'SMTP ayarları Brevo yolunu gölgeledi');
+});
+
+test('G60 Brevo anahtarı var, gönderen YOK -> yol yok ve GÖNDEREN adlandırılıyor', () => {
+  // Render'da en olası hata. Teşhis "hiç ayar yok" derse hatanın yeri bulunamaz.
+  const k = eposta.yoluCoz({ brevoAnahtar: 'x' });
+  esit(k.yontem, 'yok', 'gönderen olmadan brevo yolu seçildi');
+  dogru(k.eksik.includes('MAIL_GONDEREN'), `eksik olan ad verilmedi: ${k.eksik}`);
+});
+
+test('G61 MAIL_KULLANICI var, MAIL_SIFRE yok -> ŞİFRE adlandırılıyor', () => {
+  // Burada tuzak var: GONDEREN, MAIL_GONDEREN yoksa MAIL_KULLANICI'ya geri
+  // düşüyor. Teşhis geri düşmüş değere bakarsa bu durumu "MAIL_GONDEREN var"
+  // diye yanlış adlandırıyor. Bir kez öyle oldu; bu test onu tutuyor.
+  const k = eposta.yoluCoz({ kullanici: 'a@b.com' });
+  esit(k.yontem, 'yok', 'şifresiz SMTP yolu seçildi');
+  dogru(k.eksik.includes('MAIL_SIFRE'), `eksik olan ad verilmedi: ${k.eksik}`);
+  dogru(!k.eksik.includes('MAIL_GONDEREN'), `yanlış alan suçlandı: ${k.eksik}`);
+});
+
+test('G62 Hiçbir ayar yok -> iki yolun ikisi de anlatılıyor', () => {
+  const k = eposta.yoluCoz({});
+  esit(k.yontem, 'yok', 'ayarsız yol bulundu');
+  dogru(
+    k.eksik.includes('BREVO_API_KEY') && k.eksik.includes('MAIL_KULLANICI'),
+    `iki seçenek birlikte anlatılmadı: ${k.eksik}`,
+  );
+});
+
+test('G63 Sadece SMTP ayarları -> smtp yolu (yerelde ve kendi sunucuda çalışır)', () => {
+  const k = eposta.yoluCoz({ kullanici: 'a@b.com', sifre: 'abcdefghijklmnop' });
+  esit(k.yontem, 'smtp', 'SMTP yolu seçilmedi');
+  esit(k.gonderen, 'a@b.com', 'gönderen MAIL_KULLANICI\'ya geri düşmedi');
+});
+
+// G64: 4 girdinin 16 kombinasyonunun TAMAMI. Tek tek mutasyon sınaması bu
+// kararda yetmiyor — sıra ve gonderenAcik ayrımı birbirini yedekliyor, birini
+// bozmak testi kırmıyor. Davranışın kendisini uçtan uca sabitlemek gerekiyor:
+// her kombinasyonda hangi yol seçilmeli ve eksikse hangi değişken adlandırılmalı.
+const E = ''; // tanımsız
+const K = 'a@b.com';
+const S = 'abcdefghijklmnop';
+const TABLO = [
+  //  brevo gonderenAcik kullanici sifre  -> beklenen yol, mesajda GEÇMESİ gereken ad
+  ['x', K, K, S, 'brevo', null],
+  ['x', K, K, E, 'brevo', null],
+  ['x', K, E, S, 'brevo', null],
+  ['x', K, E, E, 'brevo', null],
+  ['x', E, K, S, 'brevo', null], // gönderen MAIL_KULLANICI'ya geri düşüyor
+  ['x', E, K, E, 'brevo', null], // aynı: anahtar + geri düşmüş gönderen yeter
+  ['x', E, E, S, 'yok', 'MAIL_GONDEREN'],
+  ['x', E, E, E, 'yok', 'MAIL_GONDEREN'],
+  [E, K, K, S, 'smtp', null],
+  [E, K, K, E, 'yok', 'MAIL_SIFRE'],
+  [E, K, E, S, 'yok', 'MAIL_KULLANICI'],
+  [E, K, E, E, 'yok', 'MAIL_GONDEREN'],
+  [E, E, K, S, 'smtp', null],
+  [E, E, K, E, 'yok', 'MAIL_SIFRE'],
+  [E, E, E, S, 'yok', 'MAIL_KULLANICI'],
+  [E, E, E, E, 'yok', 'BREVO_API_KEY'],
+];
+
+test('G64 16 yapılandırma kombinasyonunun hepsi doğru teşhis ediliyor', () => {
+  const hatalar = [];
+  TABLO.forEach(([brevoAnahtar, gonderenAcik, kullanici, sifre, yolBekleniyor, ad]) => {
+    const etiket = `brevo=${brevoAnahtar ? 'var' : 'yok'} gonderen=${gonderenAcik ? 'var' : 'yok'}`
+      + ` kullanici=${kullanici ? 'var' : 'yok'} sifre=${sifre ? 'var' : 'yok'}`;
+    const k = eposta.yoluCoz({ brevoAnahtar, gonderenAcik, kullanici, sifre });
+    if (k.yontem !== yolBekleniyor) {
+      hatalar.push(`${etiket}: yol ${k.yontem}, beklenen ${yolBekleniyor}`);
+      return;
+    }
+    if (ad === null) {
+      if (k.eksik !== null) hatalar.push(`${etiket}: yol varken eksik bildirildi`);
+      if (!k.gonderen) hatalar.push(`${etiket}: gönderen boş kaldı`);
+      return;
+    }
+    if (!k.eksik) hatalar.push(`${etiket}: yol yok ama eksik anlatılmadı`);
+    else if (!k.eksik.includes(ad)) hatalar.push(`${etiket}: "${ad}" adlandırılmadı -> ${k.eksik}`);
+  });
+  esit(hatalar.length, 0, `kombinasyon hataları:\n    ${hatalar.join('\n    ')}`);
+});
+
+// --- KVKK metinlerindeki iletişim adresi (G65-G67) --------------------------
+//
+// Niye güvenlik testi: aydınlatma metni HER kullanıcıya gösteriliyor. Oraya
+// yazılan adres, kaydolan herkesin gördüğü ve kaydettiği bir iletişim
+// bilgisi. Geliştiricinin kişisel adresi bir süre oradaydı; proje adresine
+// taşındı (SÜRÜM 1.5). Bu testler geri sızmasını engelliyor.
+//
+// KVKK m.10/a ve GDPR m.13(1)(a) adresin BULUNMASINI zorunlu kılıyor, yani
+// "sil, sorun kalmaz" bir çözüm değil. Doğru hâli: tek ve kasten seçilmiş
+// bir adres bulunacak.
+
+const EPOSTA_KALIBI = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+test('G65 Aydınlatma metni bir iletişim adresi İÇERİYOR (KVKK m.10/a)', () => {
+  const bulunan = kvkk.AYDINLATMA.match(EPOSTA_KALIBI) || [];
+  dogru(bulunan.length > 0, 'aydınlatma metninde hiç iletişim adresi yok');
+});
+
+test('G66 KVKK metinlerindeki TÜM adresler kasten seçilen adres', () => {
+  // Kalıbı iki metne birlikte uyguluyor: rıza metnine de adres sızabilir.
+  const hepsi = [
+    ...(kvkk.AYDINLATMA.match(EPOSTA_KALIBI) || []),
+    ...(kvkk.ACIK_RIZA.match(EPOSTA_KALIBI) || []),
+  ];
+  const yabanci = hepsi.filter((a) => a !== kvkk.ILETISIM);
+  esit(
+    yabanci.length, 0,
+    `metinlerde ILETISIM dışında adres var: ${yabanci.join(', ')}`,
+  );
+});
+
+test('G68 Aydınlatma metni veri sorumlusunu ADLANDIRIYOR (KVKK m.10/a)', () => {
+  // Kullanıcı haklarını KİME karşı kullanacağını bilmek zorunda. Satır
+  // silinirse metin m.10/a'yı karşılamaz.
+  //
+  // Not: bu test geliştiricinin kişisel adını ARAMIYOR. Arasaydı o adı test
+  // dosyasına yazmak gerekirdi; metinden çıkarılan ad depoya geri girerdi.
+  // Ölçü, sorumlunun sabitte ne yazıyorsa metinde de o yazması.
+  dogru(
+    kvkk.AYDINLATMA.includes(`veri sorumlusu: ${kvkk.VERI_SORUMLUSU}`),
+    'veri sorumlusu satırı metinde yok ya da sabitle uyuşmuyor',
+  );
+  dogru(kvkk.VERI_SORUMLUSU.trim().length > 0, 'veri sorumlusu adı boş');
+});
+
+test('G67 Rıza sürümü, metinler değiştiğinde yeniden onay tetikliyor', () => {
+  // SURUM artmazsa kullanıcı, artık geçerli olmayan bir metne verdiği rıza
+  // ile kalır. Bu testin koruduğu şey sürümün BİÇİMİ: boş ya da tanımsız bir
+  // sürüm, karşılaştırmayı sessizce anlamsızlaştırır.
+  dogru(
+    typeof kvkk.SURUM === 'string' && /^\d+\.\d+$/.test(kvkk.SURUM),
+    `sürüm numarası beklenen biçimde değil: ${JSON.stringify(kvkk.SURUM)}`,
+  );
+  dogru(Boolean(kvkk.SURUM_TARIHI), 'sürüm tarihi boş');
 });
 
 Promise.all(sozler).then(() => {

@@ -16,11 +16,14 @@ function baslik(m) { console.log(`\n${m}`); }
 
 function ayarlariYaz() {
   const a = eposta.ayarlar();
+  const etiket = { brevo: 'Brevo HTTP API (443)', smtp: 'SMTP (587)', yok: 'YOK' };
   baslik('=== AYARLAR ===');
-  console.log(`  SMTP sunucusu : ${a.sunucu}:${a.port}`);
-  console.log(`  MAIL_KULLANICI: ${a.kullanici || 'TANIMLI DEĞİL'}`);
-  console.log(`  MAIL_SIFRE    : ${a.sifreTanimliMi ? `tanımlı (${a.sifreUzunlugu} karakter)` : 'TANIMLI DEĞİL'}`);
-  console.log(`  Gönderen      : ${a.gonderen || '(MAIL_KULLANICI kullanılacak)'}`);
+  console.log(`  Kullanılacak yol: ${etiket[a.yontem]}`);
+  console.log(`  BREVO_API_KEY   : ${a.brevoAnahtariVar ? 'tanımlı' : 'tanımlı değil'}`);
+  console.log(`  MAIL_KULLANICI  : ${a.kullanici || 'tanımlı değil'}`);
+  console.log(`  MAIL_SIFRE      : ${a.sifreTanimliMi ? `tanımlı (${a.sifreUzunlugu} karakter)` : 'tanımlı değil'}`);
+  console.log(`  SMTP sunucusu   : ${a.sunucu}:${a.port}`);
+  console.log(`  Gönderen        : ${a.gonderen || 'TANIMLI DEĞİL'}`);
   return a;
 }
 
@@ -57,13 +60,31 @@ function hatayiYorumla(h) {
       'görüyorsanız eposta.js içindeki ipv4Coz() çalışmıyor demektir.',
     ].join('\n');
   }
-  if (kod === 'ETIMEDOUT' || kod === 'ESOCKET' || kod === 'ECONNECTION') {
+  if (kod === 'ETIMEDOUT' || kod === 'ESOCKET' || kod === 'ECONNECTION'
+      || mesaj.includes('Connection timeout')) {
     return [
       'Sunucuya hiç bağlanılamadı (kimlik doğrulamaya sıra gelmedi).',
       '',
-      '  - Ağ/güvenlik duvarı 587 portunu engelliyor olabilir.',
-      '  - Bazı kurumsal ve okul ağları SMTP çıkışını kapatıyor.',
-      '  - MAIL_PORT=465 denenebilir (o portta şifreli bağlantı baştan kurulur).',
+      'RENDER ÜCRETSİZ KATMANINDA BU KAÇINILMAZ. Render, Eylül 2025\'ten beri',
+      'ücretsiz web servislerinde 25, 465 ve 587 numaralı SMTP portlarına giden',
+      'trafiği tamamen engelliyor. Hiçbir SMTP ayarı bunu aşamaz.',
+      '',
+      'Çözüm: BREVO_API_KEY tanımla. Brevo 443 portundan HTTP ile gönderiyor,',
+      'o port engellenmiyor. Ücretsiz katmanı günde 300 posta ve alan adı',
+      'istemiyor; Gmail adresini "tek gönderen" olarak doğrulaman yeterli.',
+      '',
+      'Yerel ağda bu hatayı görüyorsan: okul/kurum ağı SMTP çıkışını kapatmış',
+      'olabilir, ya da MAIL_PORT=465 denenebilir.',
+    ].join('\n');
+  }
+  if (mesaj.startsWith('Brevo ')) {
+    return [
+      `Brevo isteği reddetti: ${mesaj}`,
+      '',
+      '  401 -> API anahtarı yanlış ya da iptal edilmiş.',
+      '  400 + "sender" -> MAIL_GONDEREN adresi Brevo\'da doğrulanmamış.',
+      '         Brevo panosunda Senders bölümünden adresi ekleyip gelen',
+      '         doğrulama postasındaki bağlantıya tıklaman gerekiyor.',
     ].join('\n');
   }
   if (mesaj.includes('ENOTFOUND') || kod === 'EDNS') {
@@ -76,12 +97,20 @@ async function main() {
   const a = ayarlariYaz();
 
   if (!eposta.yapilandirildiMi()) {
+    console.log('');
+    console.log(`  EKSİK: ${eposta.eksikNe()}`);
     baslik('=== SONUÇ: YAPILANDIRILMAMIŞ ===');
     console.log('  MAIL_KULLANICI ve/veya MAIL_SIFRE tanımlı değil, bu yüzden posta');
     console.log('  gönderilmiyor. Uygulama bu durumda çökmüyor: şifre sıfırlama');
     console.log('  bağlantısını sunucu terminaline yazıyor.');
     console.log('');
-    console.log('  Gerçekten posta göndermek için backend/.env dosyasına ekleyin:');
+    console.log('  Gerçekten posta göndermek için backend/.env dosyasına EKLEYİN.');
+    console.log('');
+    console.log('  Render gibi SMTP portlarını engelleyen ortamlarda:');
+    console.log('    BREVO_API_KEY="brevo-api-anahtariniz"');
+    console.log('    MAIL_GONDEREN="dogrulanmis@gmail.com"');
+    console.log('');
+    console.log('  SMTP\'nin açık olduğu ortamlarda (yerel, kendi sunucun):');
     console.log('    MAIL_KULLANICI="hesabiniz@gmail.com"');
     console.log('    MAIL_SIFRE="16hanelikuygulamasifresi"');
     console.log('');
@@ -90,7 +119,7 @@ async function main() {
     return;
   }
 
-  if (a.sifreUzunlugu !== 16) {
+  if (a.yontem === 'smtp' && a.sifreUzunlugu !== 16) {
     baslik('=== UYARI ===');
     console.log(`  MAIL_SIFRE ${a.sifreUzunlugu} karakter. Google'ın uygulama şifreleri`);
     console.log('  16 karakterdir. Boşluklu yapıştırılmış ya da normal hesap şifresi');

@@ -1,19 +1,24 @@
-// E-posta gönderimi (şifre sıfırlama bağlantısı için).
+// E-posta gönderimi.
 //
-// NİYE GMAIL SMTP: ücretsiz bir e-posta servisi gerekiyordu. Gmail, normal bir
-// hesapla günde 500 ileti gönderimine izin veriyor ve bu proje için fazlasıyla
-// yeterli. Ayrı bir servise (SendGrid, Mailgun) kayıt olmak ve kart bilgisi
-// vermek gerekmiyor.
+// İKİ TAŞIYICI VAR ve hangisinin kullanılacağı ayarlardan anlaşılıyor:
 //
-// UYGULAMA ŞİFRESİ: hesabın kendi şifresi KULLANILMIYOR. Google, iki adımlı
-// doğrulama açık hesaplarda "uygulama şifresi" üretiyor; yalnızca posta
-// göndermeye yarıyor, hesaba giriş yapmaya yaramıyor ve tek tıkla iptal
-// edilebiliyor. Sızdığında zarar hesabın tamamı değil, yalnızca posta
-// gönderimi oluyor.
+//   BREVO_API_KEY tanımlıysa  -> Brevo'nun HTTP API'si (443 portu)
+//   MAIL_KULLANICI tanımlıysa -> SMTP (587 portu)
+//   hiçbiri yoksa             -> gönderim yok, bağlantı günlüğe yazılır
 //
-// YAPILANDIRILMAMIŞSA NE OLUYOR: uygulama çökmüyor. Bağlantı sunucu
-// günlüğüne yazılıyor, böylece posta hesabı olmadan da (yerel geliştirmede,
-// ya da projeyi klonlayan biri) şifre sıfırlama akışı denenebiliyor.
+// NİYE İKİSİ BİRDEN — yaşanmış bir duvardan çıktı:
+// Render'ın ÜCRETSİZ web servisleri Eylül 2025'ten beri 25, 465 ve 587
+// numaralı SMTP portlarına giden trafiği tamamen engelliyor (Render'ın kendi
+// değişiklik günlüğü). Yani Gmail SMTP orada hiçbir ayarla çalışmıyor; hata
+// "Connection timeout" diye geliyor ve sebebi koddan anlaşılmıyor.
+//
+// HTTP API bu duvarı aşıyor çünkü 443 portunu kimse engellemiyor. SMTP yolu
+// yine de duruyor: yerel geliştirmede ve ileride kendi sunucusunda (Hetzner
+// gibi) çalışıyor, orada ayrı bir servise bağımlı olmaya gerek yok.
+//
+// BREVO NİYE: ücretsiz katmanı günde 300 posta ve ALAN ADI İSTEMİYOR — düz bir
+// Gmail adresini "tek gönderen" olarak doğrulamak yetiyor. Resend gibi
+// alternatifler alan adı doğrulaması istediği için bu projeye uymuyordu.
 const nodemailer = require('nodemailer');
 const dns = require('dns').promises;
 const net = require('net');
@@ -22,38 +27,107 @@ const SUNUCU = process.env.MAIL_SUNUCU || 'smtp.gmail.com';
 const PORT = Number(process.env.MAIL_PORT || 587);
 const KULLANICI = process.env.MAIL_KULLANICI || '';
 const SIFRE = process.env.MAIL_SIFRE || '';
+
+const BREVO_ANAHTAR = process.env.BREVO_API_KEY || '';
+// Brevo'da doğrulanmış gönderen adresi. Tanımlı değilse SMTP kullanıcısına
+// düşüyor; ikisi de yoksa gönderim yapılamıyor.
 const GONDEREN = process.env.MAIL_GONDEREN || KULLANICI;
+const GONDEREN_ADI = process.env.MAIL_GONDEREN_ADI || 'Besin Risk Analiz';
 
 let tasiyici = null;
 let tasiyiciIp = null;
 let cozumZamani = 0;
-
-// Çözülen adres bu kadar süre yeniden kullanılıyor. Gmail'in IP'leri dönüyor,
-// o yüzden süresiz önbelleklemiyoruz; ama her postada DNS sorgusu da gereksiz.
 const IP_TAZELIK_MS = 10 * 60 * 1000;
 
-function yapilandirildiMi() {
-  return Boolean(KULLANICI && SIFRE);
+/**
+ * Hangi yol kullanılabilir, kullanılamıyorsa niye? SAF fonksiyon.
+ *
+ * Niye saf: bu kararın üç girdisi de modül yüklenirken process.env'den okunup
+ * sabitlere alınıyor. Karar o sabitlerin içine gömülü kalırsa sınanamaz —
+ * kombinasyonları denemek için her seferinde ayrı bir Node süreci başlatmak
+ * gerekir. Burada ayırınca testler düpedüz çağırabiliyor (G58-G63).
+ *
+ * Niye bu kadar ayrıntılı teşhis: YARIM yapılandırma sessiz. Render'a
+ * BREVO_API_KEY girip MAIL_GONDEREN unutmak postayı tamamen durduruyor, ama
+ * kullanıcı ekranda "bağlantı gönderildi" görüyor. "Hiç ayar yok" ile "bir
+ * ayar eksik" aynı mesajı verirse hatanın yeri bulunamaz.
+ *
+ * gonderenAcik = MAIL_GONDEREN'in KENDİSİ, MAIL_KULLANICI'ya geri düşmeden.
+ * Ayrı duruyor çünkü dördüncü dalın mesajı adıyla "MAIL_GONDEREN tanımlı"
+ * diyor; geri düşmüş değere bakarsak aslında MAIL_KULLANICI tanımlıyken o
+ * cümle yalan olur. İlk yazımda bu yüzden yanlış teşhis çıkmıştı.
+ *
+ * DİKKAT — ölçtüm: bugün bu ayrım tek başına taşıyıcı DEĞİL. Dalların sırası
+ * da aynı hatayı engelliyor (kullanıcı/şifre dalları önce geliyor), yani iki
+ * koruma birbirini yedekliyor; sadece birini bozmak teşhisi bozmuyor. O yüzden
+ * bu davranışı tek bir mutasyona değil, 16 kombinasyonu birden gezen G64'e
+ * bağladım. Yapıyı değiştirirken dayanak G64'ün tablosu olsun, bu yorum değil.
+ */
+function yoluCoz({
+  brevoAnahtar = '', gonderenAcik = '', kullanici = '', sifre = '',
+} = {}) {
+  const gonderen = gonderenAcik || kullanici;
+  if (brevoAnahtar && gonderen) return { yontem: 'brevo', gonderen, eksik: null };
+  if (kullanici && sifre) return { yontem: 'smtp', gonderen, eksik: null };
+
+  let eksik;
+  if (brevoAnahtar) {
+    eksik = 'BREVO_API_KEY tanımlı ama gönderen adresi yok. Brevo gönderen '
+      + 'adresini tahmin edemez: Brevo panosunda doğruladığın adresi '
+      + 'MAIL_GONDEREN olarak ekle.';
+  } else if (kullanici && !sifre) {
+    eksik = 'MAIL_KULLANICI tanımlı ama MAIL_SIFRE yok.';
+  } else if (sifre && !kullanici) {
+    eksik = 'MAIL_SIFRE tanımlı ama MAIL_KULLANICI yok.';
+  } else if (gonderenAcik) {
+    eksik = 'MAIL_GONDEREN tanımlı ama ne BREVO_API_KEY ne de '
+      + 'MAIL_KULLANICI/MAIL_SIFRE var. Gönderecek bir yol yok.';
+  } else {
+    eksik = 'Hiçbir posta ayarı tanımlı değil (ne BREVO_API_KEY + '
+      + 'MAIL_GONDEREN, ne MAIL_KULLANICI + MAIL_SIFRE).';
+  }
+  return { yontem: 'yok', gonderen, eksik };
 }
+
+/** Bu süreçteki ayarlarla kararı verir. */
+function kararim() {
+  return yoluCoz({
+    brevoAnahtar: BREVO_ANAHTAR,
+    gonderenAcik: process.env.MAIL_GONDEREN || '',
+    kullanici: KULLANICI,
+    sifre: SIFRE,
+  });
+}
+
+function yontem() {
+  return kararim().yontem;
+}
+
+function yapilandirildiMi() {
+  return yontem() !== 'yok';
+}
+
+/** Yapılandırma neden eksik? Yol varsa null. */
+function eksikNe() {
+  return kararim().eksik;
+}
+
+/* ───────────────────────────── SMTP yolu ───────────────────────────── */
 
 /**
  * SMTP sunucusunun IPv4 adresini çözer.
  *
- * NİYE KENDİMİZ ÇÖZÜYORUZ — gerçek bir hatadan çıktı:
- * Render'ın konteynerinde IPv6 bağlantısı yok. Nodemailer ise adı hem IPv4 hem
- * IPv6 olarak çözüp iki listeyi birleştiriyor ve aralarından RASTGELE birini
- * seçiyor (shared/index.js, formatDNSValue). IPv6 seçildiği anda bağlantı
- * "connect ENETUNREACH ...:587" diye patlıyor.
+ * NİYE KENDİMİZ ÇÖZÜYORUZ — bu da yaşanmış bir hata:
+ * Nodemailer adı hem IPv4 hem IPv6 olarak çözüp iki listeyi birleştiriyor ve
+ * aralarından RASTGELE birini seçiyor (shared/index.js, formatDNSValue).
+ * IPv6'sı olmayan bir ortamda gönderimlerin yaklaşık yarısı
+ * "connect ENETUNREACH" diye patlıyor — kalıcı değil, yazı-tura bir hata.
  *
- * Yani hata kalıcı değil, YAZI-TURA: bazı postalar gidiyor, bazıları gitmiyor.
- * Teşhis edilmesi en zor hata türü.
- *
- * Çözüm aynı dosyadan geliyor: nodemailer, host zaten bir IP adresiyse DNS'i
- * hiç çalıştırmıyor (resolveHostname içinde net.isIP kontrolü). Biz IPv4'e
- * çözüp öyle veriyoruz, rastgele seçim devreye hiç girmiyor.
+ * Nodemailer, host zaten bir IP adresiyse DNS'i hiç çalıştırmıyor; biz de
+ * IPv4'e çözüp öyle veriyoruz.
  */
 async function ipv4Coz() {
-  if (net.isIP(SUNUCU)) return SUNUCU;          // zaten IP verilmişse dokunma
+  if (net.isIP(SUNUCU)) return SUNUCU;
   if (tasiyiciIp && Date.now() - cozumZamani < IP_TAZELIK_MS) return tasiyiciIp;
   const adresler = await dns.resolve4(SUNUCU);
   if (!adresler || !adresler.length) {
@@ -73,10 +147,8 @@ async function tasiyiciyiAl() {
       // geçiyor. secure:true yalnızca 465 için doğru olurdu.
       secure: PORT === 465,
       auth: { user: KULLANICI, pass: SIFRE },
-      // SERTİFİKA DOĞRULAMASI BOZULMUYOR: bağlantı IP'ye gidiyor ama TLS
-      // el sıkışmasında sunucu adı olarak alan adı sunuluyor, sertifika da
-      // ona göre doğrulanıyor. Bu satır olmasaydı sertifika IP'ye
-      // uymadığı için bağlantı reddedilirdi.
+      // Bağlantı IP'ye gidiyor ama sertifika ALAN ADINA göre doğrulanıyor.
+      // Bu satır olmasaydı sertifika IP'ye uymadığı için reddedilirdi.
       tls: { servername: SUNUCU },
     });
     tasiyiciIp = ip;
@@ -84,21 +156,50 @@ async function tasiyiciyiAl() {
   return tasiyici;
 }
 
-/**
- * Şifre sıfırlama bağlantısını gönderir.
- *
- * Dönen değer gönderimin BAŞARISINI bildirir ama uç nokta bunu kullanıcıya
- * YANSITMIYOR: "bu adrese posta gitti" demek, o adresin sistemde kayıtlı
- * olduğunu doğrulamak olurdu (bkz. index.js /api/sifre/unuttum).
- */
+/* ───────────────────────────── Brevo yolu ───────────────────────────── */
+
+async function brevoIleGonder(alici, konu, metin) {
+  const cevap = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      accept: 'application/json',
+      'api-key': BREVO_ANAHTAR,
+    },
+    body: JSON.stringify({
+      sender: { name: GONDEREN_ADI, email: GONDEREN },
+      to: [{ email: alici }],
+      subject: konu,
+      textContent: metin,
+    }),
+  });
+
+  if (!cevap.ok) {
+    // Brevo hatayı JSON gövdede açıklıyor; sebebi günlükte görünsün diye
+    // okuyoruz. Okunamazsa durum koduyla yetiniyoruz.
+    let ayrinti = '';
+    try {
+      const g = await cevap.json();
+      ayrinti = g && (g.message || g.code) ? ` — ${g.code || ''} ${g.message || ''}`.trim() : '';
+    } catch (e) { /* gövde JSON değil */ }
+    throw new Error(`Brevo ${cevap.status}${ayrinti}`);
+  }
+  return true;
+}
+
+/* ──────────────────────── Ortak gönderim noktası ──────────────────────── */
+
 async function gonder(alici, konu, metin, gunlukNotu) {
-  if (!yapilandirildiMi()) {
+  const y = yontem();
+  if (y === 'yok') {
     console.warn(
-      '[POSTA] E-posta yapılandırılmamış (MAIL_KULLANICI / MAIL_SIFRE yok).\n'
+      `[POSTA] Gönderilemedi — yapılandırma eksik: ${eksikNe()}\n`
       + `[POSTA] ${gunlukNotu}`,
     );
     return false;
   }
+  if (y === 'brevo') return brevoIleGonder(alici, konu, metin);
+
   const t = await tasiyiciyiAl();
   await t.sendMail({ from: GONDEREN, to: alici, subject: konu, text: metin });
   return true;
@@ -212,25 +313,38 @@ async function silmeUyarisiGonder(alici, kalanGun) {
  * verify() bunları gönderim denemeden ayırt ediyor.
  */
 async function baglantiyiDene() {
-  if (!yapilandirildiMi()) return { tamam: false, sebep: 'yapilandirilmamis' };
+  const y = yontem();
+  if (y === 'yok') return { tamam: false, sebep: 'yapilandirilmamis' };
+  if (y === 'brevo') {
+    // Brevo'da "bağlantıyı sına" diye ayrı bir uç nokta yok; hesap bilgisini
+    // çeken uç nokta anahtarın geçerliliğini doğrulamaya yetiyor.
+    const c = await fetch('https://api.brevo.com/v3/account', {
+      headers: { accept: 'application/json', 'api-key': BREVO_ANAHTAR },
+    });
+    if (!c.ok) throw new Error(`Brevo ${c.status} — API anahtarı reddedildi.`);
+    return { tamam: true, yontem: 'brevo' };
+  }
   const t = await tasiyiciyiAl();
   await t.verify();
-  return { tamam: true };
+  return { tamam: true, yontem: 'smtp' };
 }
 
 /** Teşhis için: hangi ayar tanımlı? ŞİFRENİN KENDİSİNİ DÖNDÜRMÜYOR. */
 function ayarlar() {
   return {
+    yontem: yontem(),
     sunucu: SUNUCU,
     port: PORT,
     kullanici: KULLANICI || null,
     sifreTanimliMi: Boolean(SIFRE),
     sifreUzunlugu: SIFRE.length,
+    brevoAnahtariVar: Boolean(BREVO_ANAHTAR),
     gonderen: GONDEREN || null,
   };
 }
 
 module.exports = {
+  yontem,
   sifirlamaGonder, dogrulamaGonder, zatenKayitliGonder, silmeUyarisiGonder,
-  yapilandirildiMi, baglantiyiDene, ayarlar,
+  yapilandirildiMi, eksikNe, yoluCoz, baglantiyiDene, ayarlar,
 };

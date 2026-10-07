@@ -38,8 +38,50 @@
 // Aynı karar gereği aydınlatma ve açık rıza AYRI metinler; aydınlatma için
 // "kabul ediyorum" değil "okudum ve anladım" beyanı alınıyor.
 
-const SURUM = '1.4';
+// SÜRÜM GEÇMİŞİ — bu sayı artınca TÜM kullanıcılardan yeniden rıza isteniyor
+// (src/index.js, rizaYenilenmeliMi). Metnin zorunlu içeriği değişmedikçe
+// artırılmaz; biçim düzeltmesi için artırmak kullanıcıyı boşuna yorar.
+//   1.5 — veri sorumlusu bilgileri projeye taşındı (7 Ekim 2026): iletişim
+//         adresi proje adresi oldu, veri sorumlusu adı "Besin Risk Analiz
+//         Ekibi" yazıldı. Geliştiricinin kişisel adresi ve adı her
+//         kullanıcıya görünüyordu. Ad konusundaki hukuki uyarı için
+//         VERI_SORUMLUSU sabitinin başındaki nota bakın.
+//   1.4 — saklama ve imha politikası eklendi (bölüm 5).
+const SURUM = '1.5';
 const SURUM_TARIHI = '7 Ekim 2026';
+
+// Veri sorumlusunun iletişim adresi. KVKK m.10/a ve GDPR m.13(1)(a) bunu
+// zorunlu kılıyor: kullanıcı haklarını kullanmak için başvuracak bir adres
+// görmek zorunda.
+//
+// NİYE SABİT, NİYE ORTAM DEĞİŞKENİ DEĞİL: bu adres aydınlatma metninin
+// parçası, yani değişmesi METNİN değişmesi demek — ve metin değişince
+// SURUM artmalı, yoksa kullanıcılar artık geçerli olmayan bir sürüme rıza
+// vermiş sayılır. Ortam değişkeninden okunsa, Render'da adresi değiştirmek
+// metni sessizce değiştirir ve SURUM artışı atlanır. Kodda durunca değişiklik
+// git'te görünüyor ve SURUM kararı mecburen önüne geliyor.
+//
+// Gönderen adresi (MAIL_GONDEREN) ayrı ve ortam değişkeni: o dağıtım ayarı,
+// hukuki metnin parçası değil. İkisinin aynı adres olması beklenir ama
+// zorunlu değil.
+const ILETISIM = 'besinrisk@gmail.com';
+
+// Veri sorumlusunun adı.
+//
+// ⚠ AÇIK UYARI — GERÇEK KULLANICI ALINMADAN ÖNCE OKUNACAK:
+// "Besin Risk Analiz Ekibi" hukuken bir KİŞİ DEĞİL. KVKK m.10/a ve GDPR
+// m.13(1)(a) veri sorumlusunun KİMLİĞİNİ istiyor; bu ya bir gerçek kişi
+// (ad soyad) ya da bir tüzel kişi (şirket, dernek, vakıf) olabilir. Kayıtlı
+// olmayan bir ekip adı bu şartı KARŞILAMIYOR.
+//
+// Bu hâliyle bırakılmasının sebebi: ortam demo, gerçek kullanıcı yok ve
+// proje sahibi kişisel adının her kullanıcıya görünmesini istemiyor. Demo
+// aşamasında taşınabilir bir eksiklik.
+//
+// GERÇEK KULLANICI ALINIRSA buraya ya proje sahibinin adı soyadı ya da
+// kurulacak tüzel kişinin unvanı yazılmalı ve SURUM artırılmalı. Aksi hâlde
+// kullanıcı, haklarını kime karşı kullanacağını bilmiyor demektir.
+const VERI_SORUMLUSU = 'Besin Risk Analiz Ekibi';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AYDINLATMA METNİ — bilgilendirme. Onay istenmez, beyan "okudum ve anladım".
@@ -156,12 +198,12 @@ silebilirsiniz.
 
 ## 9. Veri Sorumlusu ve İletişim
 
-Besin Risk Analiz Sistemi, İstanbul Beykent Üniversitesi öğrencisi Esma Nur
-Yıldızhan tarafından kişisel olarak geliştirilen bir projedir. Üniversite bu
-proje bakımından veri sorumlusu değildir.
+Besin Risk Analiz Sistemi, İstanbul Beykent Üniversitesi'nde bir öğrenci
+projesi olarak geliştirilmiştir. Üniversite bu proje bakımından veri
+sorumlusu değildir.
 
-Kanun kapsamında veri sorumlusu: Esma Nur Yıldızhan
-İletişim: esmanuryildizhan02@gmail.com
+Kanun kapsamında veri sorumlusu: ${VERI_SORUMLUSU}
+İletişim: ${ILETISIM}
 `.trim();
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -181,4 +223,6 @@ Rızamı dilediğim zaman geri çekebileceğimi ve geri çekmem hâlinde hesabı
 birlikte tüm verilerimin silineceğini biliyorum.
 `.trim();
 
-module.exports = { SURUM, SURUM_TARIHI, AYDINLATMA, ACIK_RIZA };
+module.exports = {
+  SURUM, SURUM_TARIHI, ILETISIM, VERI_SORUMLUSU, AYDINLATMA, ACIK_RIZA,
+};

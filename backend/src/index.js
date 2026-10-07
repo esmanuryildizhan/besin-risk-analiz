@@ -2045,11 +2045,18 @@ app.listen(PORT, () => {
   // Posta yapılandırılmamışsa bunu BAŞLANGIÇTA söylemek gerekiyor. Aksi hâlde
   // yayına alındığında "şifremi unuttum" sessizce işlemez: kullanıcı ekranda
   // "bağlantı gönderildi" görür ama postası hiç gelmez.
-  if (!eposta.yapilandirildiMi()) {
+  if (eposta.yapilandirildiMi()) {
+    const a = eposta.ayarlar();
+    const nasil = a.yontem === 'brevo'
+      ? 'Brevo HTTP API (443)'
+      : `SMTP ${a.sunucu}:${a.port}`;
+    console.log(`[POSTA] Hazır — ${nasil}, gönderen: ${a.gonderen}`);
+  } else {
     console.warn(
-      '[POSTA] Yapılandırılmamış (MAIL_KULLANICI / MAIL_SIFRE yok).\n'
-      + '[POSTA] Şifre sıfırlama bağlantıları gönderilmeyecek, bu terminale yazılacak.\n'
-      + '[POSTA] Yayına alırken .env.example dosyasındaki adımları uygulayın.',
+      `[POSTA] YAPILANDIRILMAMIŞ: ${eposta.eksikNe()}\n`
+      + '[POSTA] Doğrulama ve şifre sıfırlama bağlantıları GÖNDERİLMEYECEK;\n'
+      + '[POSTA] bu günlüğe yazılacak. Kayıt olan kimse hesabını doğrulayamaz.\n'
+      + '[POSTA] Adımlar: backend/.env.example dosyasının Brevo bölümü.',
     );
   }
 });
