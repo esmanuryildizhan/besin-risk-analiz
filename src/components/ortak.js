@@ -2,7 +2,7 @@
 //
 // Birden çok ekranın kullandığı küçük bileşenler ve risk seviyesi stilleri.
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import {
   Search, AlertCircle, AlertTriangle, X, CheckCircle, Utensils,
   Loader2, ShieldAlert,
@@ -37,7 +37,7 @@ export const KaynakYazisi = ({ kaynak }) => {
 };
 
 export const Yukleniyor = ({ yazi = 'Yükleniyor...' }) => (
-  <div className="flex items-center justify-center gap-3 text-gray-400 py-16">
+  <div className="flex items-center justify-center gap-3 text-gray-500 py-16">
     <Loader2 className="animate-spin" size={28} />
     <span className="font-medium">{yazi}</span>
   </div>
@@ -78,13 +78,17 @@ export const MenuButton = ({ icon: Icon, label, isActive, onClick, isSecondary }
         : 'text-gray-600 hover:bg-green-50 hover:text-green-700 font-medium'
     }`}
   >
-    <Icon size={22} className={isActive ? 'text-white' : 'text-gray-400'} />
+    <Icon size={22} className={isActive ? 'text-white' : 'text-gray-500'} />
     <span>{label}</span>
   </button>
 );
 
 /** Anahtar/etiket çiftlerinden seçim yapılan arama kutusu (hastalık, alerjen) */
 export const SecimKutusu = ({ label, secenekler, secili, onEkle, onCikar }) => {
+  // Bu bileşen aynı ekranda birden çok kez kullanılıyor (hastalıklar, alerjenler).
+  // Sabit bir id yazılsaydı sayfada yinelenen id olurdu ve etiket yanlış girdiye
+  // bağlanırdı; useId her örneğe benzersiz bir ön ek veriyor.
+  const kimlik = useId();
   const [arama, setArama] = useState('');
   const [acik, setAcik] = useState(false);
   const filtreli = secenekler.filter(
@@ -93,30 +97,43 @@ export const SecimKutusu = ({ label, secenekler, secili, onEkle, onCikar }) => {
   const adBul = (key) => (secenekler.find((o) => o.key === key) || { name: key }).name;
 
   return (
-    <div className="relative">
-      <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">{label}</label>
+    // Liste, odak kapsayıcıdan TAMAMEN çıkınca kapanıyor (relatedTarget kontrolü).
+    // Eskiden input'un onBlur'u 200 ms sonra kapatıyordu; liste <div> olduğu ve
+    // klavyeyle erişilemediği sürece bu çalışıyordu. Seçenekler <button> olunca
+    // Tab ile listeye geçmek input'u blur ediyor ve liste kullanıcı Enter'a
+    // basamadan kapanırdı. Bu yüzden ikisi birlikte değişti.
+    <div
+      className="relative"
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setAcik(false); }}
+    >
+      <label htmlFor={`${kimlik}-arama`} className="text-xs font-bold text-gray-500 mb-2 block uppercase">{label}</label>
       <div className="relative">
-        <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+        <Search className="absolute left-3 top-3 text-gray-500" size={18} />
         <input
+          id={`${kimlik}-arama`}
           type="text"
           placeholder="Aramak için yazın..."
           className="w-full pl-10 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-green-500 transition"
           value={arama}
           onChange={(e) => { setArama(e.target.value); setAcik(true); }}
           onFocus={() => setAcik(true)}
-          onBlur={() => setTimeout(() => setAcik(false), 200)}
         />
       </div>
       {acik && filtreli.length > 0 && (
         <div className="absolute top-full left-0 w-full bg-white border shadow-lg rounded-xl mt-1 z-50 max-h-48 overflow-auto py-2">
           {filtreli.map((o) => (
-            <div
+            // <div> değil <button>: tıklanabilir bir öğenin klavyeyle de
+            // çalışması gerekiyor (WCAG 2.1.1). <button> bunu kendiliğinden
+            // sağlıyor — odaklanabilir, Enter ve Space ile tetikleniyor,
+            // ekran okuyucuya "düğme" diye duyuruluyor.
+            <button
+              type="button"
               key={o.key}
               onClick={() => { onEkle(o.key); setArama(''); }}
-              className="px-4 py-2 hover:bg-green-50 cursor-pointer text-sm font-medium text-gray-700"
+              className="w-full text-left px-4 py-2 hover:bg-green-50 focus:bg-green-100 cursor-pointer text-sm font-medium text-gray-700 outline-none"
             >
               {o.name}
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -129,7 +146,7 @@ export const SecimKutusu = ({ label, secenekler, secili, onEkle, onCikar }) => {
             </button>
           </span>
         ))}
-        {secili.length === 0 && <span className="text-sm text-gray-400 italic p-1.5">Henüz seçim yapılmadı.</span>}
+        {secili.length === 0 && <span className="text-sm text-gray-500 italic p-1.5">Henüz seçim yapılmadı.</span>}
       </div>
     </div>
   );

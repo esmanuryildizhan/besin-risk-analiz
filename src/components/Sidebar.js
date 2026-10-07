@@ -15,7 +15,7 @@ export const Sidebar = ({ aktif, git, user, cikisYap }) => (
         {(user.name || '?').charAt(0)}{(user.surname || '').charAt(0)}
       </div>
       <div className="font-bold text-gray-800 text-lg">{user.name} {user.surname}</div>
-      <div className="text-gray-400 text-xs mt-1">{user.email}</div>
+      <div className="text-gray-500 text-xs mt-1">{user.email}</div>
     </div>
 
     <nav className="flex-1 px-4 space-y-2">

@@ -17,7 +17,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "a11y": "eslint --no-eslintrc -c .eslintrc.a11y.js --ext .js src/"
   },
   "eslintConfig": {
     "extends": [

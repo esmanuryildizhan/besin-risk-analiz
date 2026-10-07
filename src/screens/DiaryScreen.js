@@ -128,7 +128,7 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
                 {k.icon && <span>{k.icon}</span>}
                 <span className="truncate">{k.ad}</span>
                 {k.adet ? (
-                  <span className="text-gray-400 shrink-0">
+                  <span className="text-gray-500 shrink-0">
                     · {k.adet} × {k.porsiyonAdi} ({Math.round(k.amount)} g)
                   </span>
                 ) : null}
@@ -155,7 +155,7 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
                 <span className="text-sm font-bold text-gray-600 w-20 text-right">{k.kcal} kcal</span>
                 <button
                   onClick={() => onSil(k.id)} disabled={kilitli}
-                  className="text-gray-400 hover:text-red-500 transition disabled:opacity-40"
+                  className="text-gray-500 hover:text-red-500 transition disabled:opacity-40"
                   aria-label="Kaydı sil"
                 >
                   <X size={16} />
@@ -169,22 +169,23 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
       {/* Besin seçerek ekleme */}
       <div className="relative">
         <div className="flex items-center gap-2 border rounded-xl px-3 focus-within:border-green-500 transition">
-          <Search size={18} className="text-gray-400 shrink-0" />
+          <Search size={18} className="text-gray-500 shrink-0" />
           <input
             value={arama}
             onChange={(e) => setArama(e.target.value)}
             placeholder="Besin ara (ör. yoğurt) — veya aşağıdan kalori gir"
-            className="p-3 outline-none text-sm w-full bg-transparent"
+            aria-label="Besin ara"
+            className="p-3 outline-none text-sm w-full bg-transparent rounded-lg focus:ring-2 focus:ring-green-500 focus:ring-inset"
           />
-          {araniyor && <Loader2 size={16} className="animate-spin text-gray-400 shrink-0" />}
+          {araniyor && <Loader2 size={16} className="animate-spin text-gray-500 shrink-0" />}
           <span className="flex items-center gap-1 shrink-0 border-l pl-3">
             <input
               type="number" min="0.5" step="0.5" value={adet}
               onChange={(e) => setAdet(e.target.value)}
-              className="w-14 p-2 text-sm text-center outline-none bg-transparent"
+              className="w-14 p-2 text-sm text-center outline-none bg-transparent rounded-lg focus:ring-2 focus:ring-green-500 focus:ring-inset"
               aria-label="Kaç porsiyon"
             />
-            <span className="text-xs text-gray-400 pr-1">adet</span>
+            <span className="text-xs text-gray-500 pr-1">adet</span>
           </span>
         </div>
 
@@ -201,7 +202,7 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
                 >
                   <span className="text-sm text-gray-800 min-w-0">
                     {b.icon} {b.name}
-                    <span className="text-gray-400">
+                    <span className="text-gray-500">
                       {' '}· {secilenAdet} × {b.portionName}
                     </span>
                   </span>
@@ -356,7 +357,7 @@ export const DiaryScreen = () => {
         <div className="bg-white rounded-3xl border shadow-sm p-6 sm:p-10">
           <div className="grid grid-cols-7 gap-2 sm:gap-4">
             {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((g) => (
-              <div key={g} className="text-center font-bold text-gray-400 uppercase text-xs mb-2 tracking-widest">{g}</div>
+              <div key={g} className="text-center font-bold text-gray-500 uppercase text-xs mb-2 tracking-widest">{g}</div>
             ))}
             {Array.from({ length: bosluk }).map((_, i) => <div key={`bos-${i}`} />)}
             {Array.from({ length: gunSayisi }).map((_, i) => {
@@ -450,8 +451,8 @@ export const DiaryScreen = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Footprints size={20} className="text-gray-400" />
-                  <Bike size={20} className="text-gray-400" />
+                  <Footprints size={20} className="text-gray-500" />
+                  <Bike size={20} className="text-gray-500" />
                   <input
                     type="number" min="1" value={aktiviteGirdi}
                     onChange={(e) => setAktiviteGirdi(e.target.value)}
@@ -529,7 +530,7 @@ export const DiaryScreen = () => {
               )}
             </div>
 
-            <p className="mt-6 text-xs text-gray-400 leading-relaxed">
+            <p className="mt-6 text-xs text-gray-500 leading-relaxed">
               Girdiğiniz her kayıt anında kaydediliyor; ayrıca kaydetmeniz gerekmiyor.
             </p>
           </div>

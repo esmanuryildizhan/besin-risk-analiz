@@ -60,7 +60,7 @@ export const RegisterScreen = ({ onBack, meta }) => {
             bir doğrulama bağlantısı gönderildi. Hesabınızı kullanmaya başlamak
             için bağlantıya tıklayın.
           </p>
-          <p className="text-xs text-gray-400 leading-relaxed mb-6">
+          <p className="text-xs text-gray-500 leading-relaxed mb-6">
             Bağlantı 24 saat geçerlidir. Posta gelmediyse gereksiz (spam)
             klasörünü kontrol edin.
           </p>
@@ -112,8 +112,8 @@ export const RegisterScreen = ({ onBack, meta }) => {
               <Activity size={24} className="text-green-500" /> Sağlık & Beslenme
             </h3>
             <div>
-              <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">Diyet Tercihi</label>
-              <select value={form.diet} onChange={degistir('diet')} className="w-full p-4 bg-white border-2 border-gray-200 rounded-xl text-gray-700 outline-none focus:border-green-500">
+              <label htmlFor="kayit-diyet" className="text-xs font-bold text-gray-500 mb-2 block uppercase">Diyet Tercihi</label>
+              <select id="kayit-diyet" value={form.diet} onChange={degistir('diet')} className="w-full p-4 bg-white border-2 border-gray-200 rounded-xl text-gray-700 outline-none focus:border-green-500">
                 {(meta.diets || ['Normal']).map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>

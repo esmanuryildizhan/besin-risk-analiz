@@ -109,10 +109,11 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
               <code className="block mt-1 p-2 bg-gray-50 rounded border break-all font-mono">{anahtar}</code>
             </details>
             <div>
-              <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">
+              <label htmlFor="totp-kod" className="text-xs font-bold text-gray-500 mb-2 block uppercase">
                 Uygulamada görünen kod
               </label>
               <input
+                id="totp-kod"
                 value={kod}
                 onChange={(e) => setKod(e.target.value.replace(/\s/g, ''))}
                 placeholder="000000" inputMode="numeric"
@@ -143,7 +144,7 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-1">
-            <Shield size={20} className={user.totpEnabled ? 'text-green-600' : 'text-gray-400'} />
+            <Shield size={20} className={user.totpEnabled ? 'text-green-600' : 'text-gray-500'} />
             İki Aşamalı Doğrulama
             {user.totpEnabled && (
               <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">AÇIK</span>
@@ -256,25 +257,25 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
           </h2>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ad" className="p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
-              <input value={form.surname} onChange={(e) => setForm({ ...form, surname: e.target.value })} placeholder="Soyad" className="p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
+              <input aria-label="Ad" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ad" className="p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
+              <input aria-label="Soyad" value={form.surname} onChange={(e) => setForm({ ...form, surname: e.target.value })} placeholder="Soyad" className="p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">E-posta</label>
-              <input value={user.email} disabled className="w-full p-4 bg-gray-100 border rounded-xl text-gray-500" />
+              <label htmlFor="profil-eposta" className="text-xs font-bold text-gray-500 mb-1 block uppercase">E-posta</label>
+              <input id="profil-eposta" value={user.email} disabled className="w-full p-4 bg-gray-100 border rounded-xl text-gray-500" />
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Cinsiyet</label>
-              <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500 text-gray-700">
+              <label htmlFor="profil-cinsiyet" className="text-xs font-bold text-gray-500 mb-1 block uppercase">Cinsiyet</label>
+              <select id="profil-cinsiyet" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })} className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500 text-gray-700">
                 <option value="">Belirtilmemiş</option>
                 <option value="Kadın">Kadın</option>
                 <option value="Erkek">Erkek</option>
               </select>
             </div>
 
-            <div className="pt-4 border-t border-gray-100">
-              <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Günlük Hedefler</label>
-              <p className="text-xs text-gray-400 mb-3 leading-relaxed">
+            <fieldset className="pt-4 border-t border-gray-100">
+              <legend className="text-xs font-bold text-gray-500 mb-1 block uppercase">Günlük Hedefler</legend>
+              <p className="text-xs text-gray-500 mb-3 leading-relaxed">
                 Günlük Takip ekranındaki halkalar bu hedeflere göre doluyor.
                 Boş bırakırsanız varsayılan (2000 kcal / 2 L) kullanılır ve ekranda
                 bunun sizin hedefiniz olmadığı belirtilir.
@@ -283,8 +284,9 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-xs text-gray-500 mb-1 block">Kalori (kcal)</span>
+                  <label htmlFor="hedef-kcal" className="text-xs text-gray-500 mb-1 block">Kalori (kcal)</label>
                   <input
+                    id="hedef-kcal"
                     type="number" min="500" max="6000" value={form.kcalGoal}
                     onChange={(e) => setForm({ ...form, kcalGoal: e.target.value })}
                     placeholder="örn. 2000"
@@ -292,8 +294,9 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
                   />
                 </div>
                 <div>
-                  <span className="text-xs text-gray-500 mb-1 block">Su (litre)</span>
+                  <label htmlFor="hedef-su" className="text-xs text-gray-500 mb-1 block">Su (litre)</label>
                   <input
+                    id="hedef-su"
                     type="number" min="0.5" max="8" step="0.1" value={form.waterGoalL}
                     onChange={(e) => setForm({ ...form, waterGoalL: e.target.value })}
                     placeholder="örn. 2"
@@ -301,7 +304,7 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
                   />
                 </div>
               </div>
-            </div>
+            </fieldset>
           </div>
         </div>
 
@@ -311,11 +314,11 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
           </h2>
           <div className="space-y-8">
             <div>
-              <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">Diyet Tercihi</label>
-              <select value={form.diet} onChange={(e) => setForm({ ...form, diet: e.target.value })} className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500 text-gray-700">
+              <label htmlFor="profil-diyet" className="text-xs font-bold text-gray-500 mb-2 block uppercase">Diyet Tercihi</label>
+              <select id="profil-diyet" value={form.diet} onChange={(e) => setForm({ ...form, diet: e.target.value })} className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500 text-gray-700">
                 {(meta.diets || ['Normal']).map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs text-gray-500 mt-2">
                 Diyetinize uymayan besinler mor "DİYETİNİZE UYGUN DEĞİL" etiketiyle gösterilir.
               </p>
             </div>
@@ -335,7 +338,7 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
 
       {(meta.diseases || []).some((h) => hastaliklar.includes(h.key) && !h.evaluable) && (
         <div className="mt-8 bg-gray-50 border border-gray-200 rounded-2xl p-5 text-sm text-gray-600 flex gap-3">
-          <Info size={20} className="shrink-0 text-gray-400" />
+          <Info size={20} className="shrink-0 text-gray-500" />
           <div>
             Seçtiğiniz hastalıklardan bazıları için elimizdeki veriyle otomatik değerlendirme yapılamıyor
             (ör. IBS için FODMAP, gut için pürin bilgisi veri tabanında yok). Bu hastalıklar için besin kartlarında

@@ -70,7 +70,7 @@ const KvkkPenceresi = ({ acik, onKapat, baslik, metin, surum, surumTarihi }) => 
     {metin ? (
       <>
         <MetinGovde metin={metin} />
-        <p className="mt-6 pt-4 border-t text-xs text-gray-400">
+        <p className="mt-6 pt-4 border-t text-xs text-gray-500">
           Metin sürümü {surum} — {surumTarihi}
         </p>
       </>
@@ -363,7 +363,7 @@ export const KvkkBaglantilari = () => {
       <KvkkPenceresi acik={acikMetin === 'riza'} onKapat={() => setAcikMetin(null)}
         baslik="Açık Rıza Metni" metin={metinler && metinler.acikRiza}
         surum={metinler && metinler.surum} surumTarihi={metinler && metinler.surumTarihi} />
-      <div className="text-center text-xs text-gray-400 mt-6 space-x-3">
+      <div className="text-center text-xs text-gray-500 mt-6 space-x-3">
         <button onClick={() => setAcikMetin('aydinlatma')} className="underline hover:text-gray-600">
           Aydınlatma Metni
         </button>

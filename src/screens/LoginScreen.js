@@ -110,7 +110,7 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
             {bekliyor ? <Loader2 className="animate-spin" size={20} /> : <>DOĞRULA <ChevronRight size={20} /></>}
           </button>
 
-          <p className="text-xs text-gray-400 text-center mt-5 leading-relaxed">
+          <p className="text-xs text-gray-500 text-center mt-5 leading-relaxed">
             Telefonunuza erişemiyorsanız, kurulum sırasında aldığınız
             yedek kodlardan birini girebilirsiniz.
           </p>
@@ -140,10 +140,11 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
 
         <div className="space-y-6">
           <div>
-            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">E-posta</label>
+            <label htmlFor="giris-eposta" className="block text-xs font-bold text-gray-500 mb-2 uppercase">E-posta</label>
             <div className="relative">
-              <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
               <input
+                id="giris-eposta"
                 type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 placeholder="ornek@email.com"
                 className="w-full pl-14 pr-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:border-green-500 outline-none text-gray-700"
@@ -151,10 +152,11 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">Şifre</label>
+            <label htmlFor="giris-sifre" className="block text-xs font-bold text-gray-500 mb-2 uppercase">Şifre</label>
             <div className="relative">
-              <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
               <input
+                id="giris-sifre"
                 type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && girisYap()}
                 placeholder="••••••••"

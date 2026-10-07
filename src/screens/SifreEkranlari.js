@@ -121,7 +121,7 @@ export const SifremiUnuttumEkrani = ({ onGeri }) => {
         aciklama={`${email} adresi kayıtlıysa, şifre sıfırlama bağlantısı gönderildi. `
           + 'Bağlantı 60 dakika geçerlidir ve yalnızca bir kez kullanılabilir.'}
       >
-        <p className="text-xs text-gray-400 text-center leading-relaxed mb-5">
+        <p className="text-xs text-gray-500 text-center leading-relaxed mb-5">
           Posta gelmediyse gereksiz (spam) klasörünü kontrol edin.
         </p>
         <button onClick={onGeri} className={dugmeStili}>Giriş ekranına dön</button>
@@ -136,7 +136,7 @@ export const SifremiUnuttumEkrani = ({ onGeri }) => {
       aciklama="Hesabınızın e-posta adresini girin. Yeni şifre belirlemeniz için bir bağlantı gönderilecek."
     >
       <div className="relative">
-        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
         <input
           type="email" value={email} onChange={(e) => setEmail(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && email && gonder()}
@@ -232,7 +232,7 @@ export const SifreYenileEkrani = ({ bilet, onBitti }) => {
           {bekliyor ? <Loader2 className="animate-spin" size={20} /> : <>ŞİFREYİ DEĞİŞTİR <ChevronRight size={20} /></>}
         </button>
 
-        <p className="text-xs text-gray-400 text-center mt-5 leading-relaxed">
+        <p className="text-xs text-gray-500 text-center mt-5 leading-relaxed">
           Telefonunuza erişemiyorsanız yedek kodlarınızdan birini girebilirsiniz.
         </p>
       </Kutu>
@@ -247,14 +247,14 @@ export const SifreYenileEkrani = ({ bilet, onBitti }) => {
     >
       <div className="space-y-5">
         <div className="relative">
-          <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
           <input
             type="password" value={sifre} onChange={(e) => setSifre(e.target.value)}
             placeholder="Yeni şifre" autoFocus className={girdiStili}
           />
         </div>
         <div className="relative">
-          <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
           <input
             type="password" value={tekrar} onChange={(e) => setTekrar(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && kaydet()}

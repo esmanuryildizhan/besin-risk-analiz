@@ -28,7 +28,7 @@ const BesinKarti = ({ besin, onTikla }) => {
 
       <h3 className="font-bold text-gray-800 text-lg leading-tight mb-1">{besin.name}</h3>
       <p className="text-gray-500 text-xs mb-1">{besin.category} • {besin.kcal} kcal / 100 g</p>
-      <p className="text-gray-400 text-xs mb-3">{besin.portionName} ({besin.portionGrams} g) ≈ {porsiyonKcal} kcal</p>
+      <p className="text-gray-500 text-xs mb-3">{besin.portionName} ({besin.portionGrams} g) ≈ {porsiyonKcal} kcal</p>
 
       <div className={`mt-auto p-3 rounded-xl text-xs font-medium ${stil.bg} ${stil.text} border ${stil.border}`}>
         {besin.analiz.ozet}
@@ -223,7 +223,7 @@ const BesinDetay = ({ besin, onKapat }) => {
           </table>
         </div>
 
-        <div className="text-xs text-gray-400 border-t pt-4 leading-relaxed">
+        <div className="text-xs text-gray-500 border-t pt-4 leading-relaxed">
           <KaynakYazisi kaynak={besin.source} /> — {besin.nameEn}
           <br />
           Bu değerlendirme bilgilendirme amaçlıdır, tıbbi tavsiye yerine geçmez.
@@ -286,7 +286,7 @@ export const DashboardScreen = ({ user }) => {
       </div>
 
       <div className="relative mb-6">
-        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={24} />
+        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-500" size={24} />
         <input
           type="text" value={arama} onChange={(e) => setArama(e.target.value)}
           placeholder="Pırasa, muz, mercimek..."
@@ -313,7 +313,7 @@ export const DashboardScreen = ({ user }) => {
       {yukleniyor ? (
         <Yukleniyor yazi="Besinler getiriliyor..." />
       ) : besinler.length === 0 ? (
-        <div className="text-center py-20 text-gray-400">
+        <div className="text-center py-20 text-gray-500">
           <Search size={48} className="mx-auto mb-4 opacity-40" />
           <p className="font-medium">"{arama}" için sonuç bulunamadı.</p>
           <p className="text-sm mt-1">Veri tabanında şu an 219 genel besin var.</p>
@@ -324,7 +324,7 @@ export const DashboardScreen = ({ user }) => {
         </div>
       )}
 
-      <footer className="mt-12 pt-6 border-t border-gray-200 text-xs text-gray-400 leading-relaxed">
+      <footer className="mt-12 pt-6 border-t border-gray-200 text-xs text-gray-500 leading-relaxed">
         Besin değerleri:{' '}
         <a href="https://turkomp.tarimorman.gov.tr/" target="_blank" rel="noreferrer" className="text-green-600 underline">
           TürKomp, Ulusal Gıda Kompozisyon Veri Tabanı v1.0

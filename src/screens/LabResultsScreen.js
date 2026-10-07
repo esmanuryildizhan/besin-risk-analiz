@@ -65,7 +65,7 @@ const SonucSatiri = ({ t, secili, onSec }) => (
     )}
     <div className="min-w-0 flex-1">
       <span className="font-semibold text-gray-700 block truncate">{t.testName}</span>
-      <span className="text-xs text-gray-400">
+      <span className="text-xs text-gray-500">
         {t.refLow !== null && t.refLow !== undefined ? `Ref: ${t.refLow}` : ''}
         {t.refHigh !== null && t.refHigh !== undefined ? `${t.refLow !== null && t.refLow !== undefined ? '–' : 'Ref: ≤'}${t.refHigh}` : ''}
         {t.unit ? ` ${t.unit}` : ''}
@@ -77,7 +77,7 @@ const SonucSatiri = ({ t, secili, onSec }) => (
       <span className="font-bold text-gray-800">
         {t.valueOp ? `${t.valueOp} ` : ''}
         {t.value !== null && t.value !== undefined ? t.value : (t.textValue || '—')}
-        {t.unit ? <span className="text-gray-400 font-normal"> {t.unit}</span> : null}
+        {t.unit ? <span className="text-gray-500 font-normal"> {t.unit}</span> : null}
       </span>
       <TahlilRozeti yorum={t.pdfYorumu} aralik={t.pdfAralik} />
     </div>
@@ -210,14 +210,14 @@ export const LabResultsScreen = () => {
                       <td className="px-4 py-3 font-medium text-gray-800">{ad}</td>
                       {karsilastirma.tarihler.map((tarih) => {
                         const t = degerler[tarih];
-                        if (!t) return <td key={tarih} className="px-4 py-3 text-gray-300">—</td>;
+                        if (!t) return <td key={tarih} className="px-4 py-3 text-gray-500">—</td>;
                         return (
                           <td key={tarih} className="px-4 py-3 whitespace-nowrap">
                             <span className="font-bold text-gray-800">
                               {t.valueOp ? `${t.valueOp} ` : ''}
                               {t.value !== null && t.value !== undefined ? t.value : (t.textValue || '—')}
                             </span>
-                            {t.unit ? <span className="text-gray-400"> {t.unit}</span> : null}
+                            {t.unit ? <span className="text-gray-500"> {t.unit}</span> : null}
                             <span className="ml-2 inline-block align-middle">
                               <TahlilRozeti yorum={t.pdfYorumu} aralik={t.pdfAralik} />
                             </span>
@@ -336,7 +336,7 @@ export const LabResultsScreen = () => {
                     <div key={b.id} className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-4 py-3 border">
                       <span className="text-sm text-gray-700 truncate">
                         {b.icon} {b.name}
-                        <span className="block text-xs text-gray-400">{b.portionName}</span>
+                        <span className="block text-xs text-gray-500">{b.portionName}</span>
                       </span>
                       <span className="text-sm font-bold text-green-700 shrink-0">
                         {b.miktar} {o.besinOgesiBirimi}
@@ -382,7 +382,7 @@ export const LabResultsScreen = () => {
                   </div>
                   <span className="min-w-0">
                     <span className="font-bold text-gray-700 block truncate">{t.tarih} tahlili</span>
-                    <span className="text-sm text-gray-400">
+                    <span className="text-sm text-gray-500">
                       {t.testler.length} test
                       {t.araliginDisinda > 0 ? ` · ${t.araliginDisinda} sonuç aralığın dışında` : ''}
                     </span>
@@ -390,10 +390,10 @@ export const LabResultsScreen = () => {
                 </button>
                 <div className="flex items-center gap-3 shrink-0">
                   <button onClick={() => sil(t.tarih)} disabled={islemde}
-                    className="text-gray-300 hover:text-red-500 transition disabled:opacity-40"
+                    className="text-gray-500 hover:text-red-500 transition disabled:opacity-40"
                     aria-label="Bu tahlili sil"><X size={18} /></button>
                   <ChevronRight size={22}
-                    className={`text-gray-400 transition ${acikTarih === t.tarih ? 'rotate-90' : ''}`} />
+                    className={`text-gray-500 transition ${acikTarih === t.tarih ? 'rotate-90' : ''}`} />
                 </div>
               </div>
               {acikTarih === t.tarih && (
@@ -406,7 +406,7 @@ export const LabResultsScreen = () => {
         </div>
       )}
 
-      <p className="mt-10 text-xs text-gray-400 leading-relaxed max-w-3xl">
+      <p className="mt-10 text-xs text-gray-500 leading-relaxed max-w-3xl">
         Bu ekran tahlil sonuçlarınızı kaydeder ve laboratuvarınızın kendi referans aralığına göre
         gösterir. <strong>Teşhis koymaz ve hastalık profilinizi değiştirmez.</strong>
         <br /><br />
