@@ -20,6 +20,9 @@ import {
 
 export default function App() {
   const [ekran, setEkran] = useState('login');
+  // Mobil yan menünün açık/kapalı durumu. Masaüstünde (lg ve üstü) menü
+  // zaten sabit duruyor; bu değer yalnızca küçük ekranlarda iş görüyor.
+  const [menuAcik, setMenuAcik] = useState(false);
   const [user, setUser] = useState(null);
   const [meta, setMeta] = useState({});
   const [hazir, setHazir] = useState(false);
@@ -121,8 +124,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex">
-      <Sidebar aktif={ekran} git={setEkran} user={user} cikisYap={cikisYap} />
-      <main className="flex-1 overflow-x-hidden">
+      <Sidebar
+        aktif={ekran} git={setEkran} user={user} cikisYap={cikisYap}
+        acik={menuAcik} setAcik={setMenuAcik}
+      />
+      {/* pt-14: mobildeki sabit üst çubuğun yüksekliği kadar boşluk.
+          lg'de üst çubuk yok, boşluk da sıfırlanıyor. */}
+      <main className="flex-1 overflow-x-hidden pt-14 lg:pt-0">
         {ekran === 'dashboard' && <DashboardScreen user={user} />}
         {ekran === 'diary' && <DiaryScreen />}
         {ekran === 'lab' && <LabResultsScreen />}

@@ -203,7 +203,10 @@ const BesinDetay = ({ besin, onKapat }) => {
 
         <div>
           <h4 className="font-bold text-gray-800 mb-3">Besin değerleri</h4>
-          <table className="w-full text-sm">
+          {/* Dar ekranda tablo taşıyordu; yatay kaydırma sayfayı değil
+              yalnızca tabloyu kaydırıyor. */}
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[22rem]">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
               <tr>
                 <th className="text-left px-4 py-2 rounded-l-lg">Değer</th>
@@ -221,6 +224,7 @@ const BesinDetay = ({ besin, onKapat }) => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         <div className="text-xs text-gray-500 border-t pt-4 leading-relaxed">
