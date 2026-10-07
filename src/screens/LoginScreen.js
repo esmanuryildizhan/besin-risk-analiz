@@ -16,7 +16,7 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
   const [hata, setHata] = useState('');
   const [bekliyor, setBekliyor] = useState(false);
 
-  // 2FA açık hesapta giriş iki adıma bölünüyor: şifre doğruysa sunucu token
+  // 2FA açık hesapta giriş iki adıma bölünüyor: parola doğruysa sunucu token
   // yerine kısa ömürlü bir ara bilet veriyor, kod bu biletle doğrulanıyor.
   const [araBilet, setAraBilet] = useState(null);
   const [kod, setKod] = useState('');
@@ -72,7 +72,7 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
   };
 
   // ───── İKİNCİ AŞAMA: doğrulayıcı kodu ─────
-  // Ayrı bir ekran olarak çiziliyor; şifre alanları görünmüyor ki kullanıcı
+  // Ayrı bir ekran olarak çiziliyor; parola alanları görünmüyor ki kullanıcı
   // hangi adımda olduğunu karıştırmasın.
   if (araBilet) {
     return (
@@ -152,7 +152,7 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
             </div>
           </div>
           <div>
-            <label htmlFor="giris-sifre" className="block text-xs font-bold text-gray-500 mb-2 uppercase">Şifre</label>
+            <label htmlFor="giris-sifre" className="block text-xs font-bold text-gray-500 mb-2 uppercase">Parola</label>
             <div className="relative">
               <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
               <input
@@ -194,7 +194,7 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
               onClick={onSifremiUnuttum}
               className="text-sm text-gray-500 hover:text-gray-700 font-semibold hover:underline"
             >
-              Şifremi unuttum
+              Parolamı unuttum
             </button>
           </div>
 

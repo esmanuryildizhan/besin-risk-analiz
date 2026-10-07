@@ -121,7 +121,7 @@ export const LabResultsScreen = () => {
     if (dosya.size > PDF_SINIRI_MB * 1024 * 1024) {
       const boyut = (dosya.size / (1024 * 1024)).toFixed(1);
       setHata(`Dosya ${boyut} MB. En fazla ${PDF_SINIRI_MB} MB olabilir. `
-        + 'e-Nabız tahlil raporları genelde 1 MB\'ın altındadır.');
+        + 'Tahlil raporları genelde 1 MB\'ın altındadır.');
       if (dosyaRef.current) dosyaRef.current.value = '';
       return;
     }
@@ -238,7 +238,7 @@ export const LabResultsScreen = () => {
         <div>
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">Tahlil Sonuçlarım</h1>
           <p className="text-gray-500">
-            e-Nabız PDF'inizi yükleyin. Sonuçlar okunur, siz onaylarsınız, sonra kaydedilir.
+            Tahlil sonucunuzu PDF olarak yükleyin. Sonuçlar okunur, siz onaylarsınız, sonra kaydedilir.
           </p>
         </div>
         <div className="mb-5"><DemoUyarisi /></div>
@@ -368,7 +368,7 @@ export const LabResultsScreen = () => {
         </div>
       ) : tahliller.length === 0 ? (
         <div className="bg-gray-50 border rounded-3xl p-10 text-center text-gray-500">
-          Henüz kayıtlı tahlil yok. Yukarıdan bir e-Nabız PDF'i yükleyin.
+          Henüz kayıtlı tahlil yok. Yukarıdan tahlil sonucunuzun PDF'ini yükleyin.
         </div>
       ) : (
         <div className="bg-white rounded-3xl border p-4 sm:p-6">

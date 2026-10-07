@@ -1,4 +1,4 @@
-// Oturum ve şifre sıfırlama biletlerine ait saf yardımcılar.
+// Oturum ve parola sıfırlama biletlerine ait saf yardımcılar.
 //
 // NİYE AYRI DOSYA: index.js içindeyken test edilemiyorlardı (o dosya yüklenince
 // sunucu ayağa kalkıyor). Buradaki iki fonksiyonun ikisi de sessizce yanlış
@@ -6,10 +6,10 @@
 const crypto = require('crypto');
 
 /**
- * Şifre sıfırlama biletinin veritabanında saklanan biçimi.
+ * Parola sıfırlama biletinin veritabanında saklanan biçimi.
  *
  * SHA-256, bcrypt DEĞİL. Bcrypt'in yavaşlığı, insanların seçtiği düşük
- * entropili şifreleri kaba kuvvetten korumak için. Bu bilet 32 baytlık
+ * entropili parolaları kaba kuvvetten korumak için. Bu bilet 32 baytlık
  * rastgele veri; tahmin edilemez, dolayısıyla yavaş özete ihtiyacı yok.
  * Özet DETERMİNİST olmalı, çünkü gelen bileti veritabanında arıyoruz.
  */
@@ -27,7 +27,7 @@ function biletOzeti(bilet) {
  * dışarıda kalır. Ters yöne hata yapılsa (damgayı saniyeye çevirmek) koruma
  * hiç çalışmazdı. İki hata da sessiz; testler bu yüzden var.
  *
- * Damga yoksa (şifre hiç sıfırlanmamış) her bilet geçerli.
+ * Damga yoksa (parola hiç sıfırlanmamış) her bilet geçerli.
  */
 function biletDamgadanSonraMi(iatSaniye, damga) {
   if (!damga) return true;
@@ -46,7 +46,7 @@ function biletDamgadanSonraMi(iatSaniye, damga) {
    sahibini dışarıda bırakabilirdi (hizmet engelleme). Süre dolunca
    kendiliğinden açılıyor.
 
-   EŞİK 10: insanın şifresini unutup deneyeceğinden fazla, kaba kuvvetin işine
+   EŞİK 10: insanın parolasını unutup deneyeceğinden fazla, kaba kuvvetin işine
    yarayacağından az.
 */
 const KILIT_ESIGI = 10;

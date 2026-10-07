@@ -1,7 +1,7 @@
-// Günlük takip kayıtlarının şifre çözme ve biçimlendirme katmanı.
+// Günlük takip kayıtlarının parola çözme ve biçimlendirme katmanı.
 //
 // NEDEN AYRI DOSYA: index.js içindeyken test edilemiyordu, çünkü o dosya
-// yüklenince sunucu ayağa kalkıyor. Burada durunca hem şifre çözme hem de
+// yüklenince sunucu ayağa kalkıyor. Burada durunca hem parola çözme hem de
 // adet/yuvarlama mantığı veritabanına bağlanmadan sınanabiliyor.
 //
 // SIFIR DİKKATİ: 0 JavaScript'te yanlış (falsy) sayılır. Kalori ya da su

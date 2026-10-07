@@ -91,7 +91,7 @@ const IP_TAZELIK_MS = 10 * 60 * 1000;
  * cümle yalan olur. İlk yazımda bu yüzden yanlış teşhis çıkmıştı.
  *
  * DİKKAT — ölçtüm: bugün bu ayrım tek başına taşıyıcı DEĞİL. Dalların sırası
- * da aynı hatayı engelliyor (kullanıcı/şifre dalları önce geliyor), yani iki
+ * da aynı hatayı engelliyor (kullanıcı/parola dalları önce geliyor), yani iki
  * koruma birbirini yedekliyor; sadece birini bozmak teşhisi bozmuyor. O yüzden
  * bu davranışı tek bir mutasyona değil, 16 kombinasyonu birden gezen G64'e
  * bağladım. Yapıyı değiştirirken dayanak G64'ün tablosu olsun, bu yorum değil.
@@ -225,7 +225,7 @@ async function brevoIleGonder(alici, konu, metin) {
         + `[POSTA]   çevresinde tırnak vardı mı: ${BREVO_HAM.tirnak ? 'EVET (soyuldu)' : 'hayır'}\n`
         + `[POSTA]   baş/son boşluk vardı mı: ${BREVO_HAM.bosluk ? 'EVET (kırpıldı)' : 'hayır'}\n`
         + '[POSTA] "xkeysib-" ile başlamıyorsa yanlış değer kopyalanmış:\n'
-        + '[POSTA]   SMTP şifresi ya da başka bir alan olabilir. Doğrusu\n'
+        + '[POSTA]   SMTP parolası ya da başka bir alan olabilir. Doğrusu\n'
         + '[POSTA]   Settings > SMTP & API > API Keys & MCP altındaki anahtar.\n'
         + '[POSTA] Şekil doğruysa anahtar silinmiş ya da devre dışı bırakılmış\n'
         + '[POSTA]   olabilir ("Create MCP server API key" seçeneği bunu yapıyor).',
@@ -257,16 +257,16 @@ async function gonder(alici, konu, metin, gunlukNotu) {
 async function sifirlamaGonder(alici, baglanti, dakika) {
   return gonder(
     alici,
-    'Şifre sıfırlama — Besin Risk Analiz Sistemi',
+    'Parola sıfırlama — Besin Risk Analiz Sistemi',
     [
-      'Besin Risk Analiz Sistemi hesabınız için şifre sıfırlama talebi alındı.',
+      'Besin Risk Analiz Sistemi hesabınız için parola sıfırlama talebi alındı.',
       '',
-      'Yeni şifrenizi belirlemek için aşağıdaki bağlantıyı açın:',
+      'Yeni parolanızı belirlemek için aşağıdaki bağlantıyı açın:',
       baglanti,
       '',
       `Bu bağlantı ${dakika} dakika geçerlidir ve yalnızca bir kez kullanılabilir.`,
       '',
-      'Bu talebi siz yapmadıysanız bu iletiyi yok sayabilirsiniz; şifreniz',
+      'Bu talebi siz yapmadıysanız bu iletiyi yok sayabilirsiniz; parolanız',
       'değişmeyecektir.',
     ].join('\n'),
     `Sıfırlama bağlantısı gönderilmedi, günlüğe yazılıyor:\n${baglanti}`,
@@ -276,7 +276,7 @@ async function sifirlamaGonder(alici, baglanti, dakika) {
 /**
  * Kayıt sonrası e-posta doğrulama bağlantısı.
  *
- * Bağlantı 24 saat yaşıyor (şifre sıfırlamanınki 60 dakika). Sebep: kullanıcı
+ * Bağlantı 24 saat yaşıyor (parola sıfırlamanınki 60 dakika). Sebep: kullanıcı
  * kayıt postasını ertesi gün açabilir ve bu bilet tek başına hesabı ele
  * geçirmeye yaramıyor — yalnızca "bu adres gerçekten benim" diyor.
  */
@@ -315,8 +315,8 @@ async function zatenKayitliGonder(alici) {
       'Bu adresle Besin Risk Analiz Sistemi\'ne kayıt olunmaya çalışıldı, ancak',
       'bu adrese ait bir hesap zaten var.',
       '',
-      'Bunu siz yaptıysanız doğrudan giriş yapabilirsiniz. Şifrenizi',
-      'hatırlamıyorsanız giriş ekranındaki "Şifremi unuttum" bağlantısını',
+      'Bunu siz yaptıysanız doğrudan giriş yapabilirsiniz. Parolanızı',
+      'hatırlamıyorsanız giriş ekranındaki "Parolamı unuttum" bağlantısını',
       'kullanın.',
       '',
       'Bu denemeyi siz yapmadıysanız bir şey yapmanız gerekmiyor; hesabınıza',
@@ -358,7 +358,7 @@ async function silmeUyarisiGonder(alici, kalanGun) {
  *
  * Niye ayrı: "posta gitmiyor" iki ayrı sorun olabilir — ayarlar hiç yok, ya da
  * ayarlar var ama Gmail reddediyor. İkincisinin sebebi de birkaç türlü
- * (uygulama şifresi yanlış, iki adımlı doğrulama kapalı, port engelli).
+ * (uygulama parolası yanlış, iki adımlı doğrulama kapalı, port engelli).
  * verify() bunları gönderim denemeden ayırt ediyor.
  */
 async function baglantiyiDene() {

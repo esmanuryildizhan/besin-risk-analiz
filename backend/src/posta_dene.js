@@ -8,7 +8,7 @@
 //   node src/posta_dene.js adres@ornek.com  -> sınar ve deneme postası yollar
 //
 // ŞİFRE EKRANA YAZILMIYOR; yalnızca tanımlı olup olmadığı ve kaç karakter
-// olduğu gösteriliyor (uygulama şifresi 16 hane olmalı — en sık hata bu).
+// olduğu gösteriliyor (uygulama parolası 16 hane olmalı — en sık hata bu).
 require('dotenv').config();
 const eposta = require('./eposta');
 
@@ -34,17 +34,17 @@ function hatayiYorumla(h) {
 
   if (kod === 'EAUTH' || mesaj.includes('535') || mesaj.includes('Username and Password not accepted')) {
     return [
-      'Gmail kullanıcı adı/şifre kombinasyonunu REDDETTİ.',
+      'Gmail kullanıcı adı/parola kombinasyonunu REDDETTİ.',
       '',
       'En sık üç sebep:',
-      '  1. MAIL_SIFRE yerine hesabın NORMAL şifresi yazılmış.',
-      '     Gmail normal şifreyle SMTP bağlantısı kabul etmiyor;',
-      '     "uygulama şifresi" üretilmesi gerekiyor.',
-      '  2. Uygulama şifresi boşluklu yapıştırılmış. Google onu',
+      '  1. MAIL_SIFRE yerine hesabın NORMAL parolası yazılmış.',
+      '     Gmail normal parolayla SMTP bağlantısı kabul etmiyor;',
+      '     "uygulama parolası" üretilmesi gerekiyor.',
+      '  2. Uygulama parolası boşluklu yapıştırılmış. Google onu',
       '     "abcd efgh ijkl mnop" diye gösteriyor; BOŞLUKSUZ yazılmalı',
       '     (16 karakter).',
       '  3. Hesapta iki adımlı doğrulama kapalı. Kapalıysa Google',
-      '     uygulama şifresi üretmiyor.',
+      '     uygulama parolası üretmiyor.',
     ].join('\n');
   }
   if (kod === 'ENETUNREACH' || mesaj.includes('ENETUNREACH')) {
@@ -101,7 +101,7 @@ async function main() {
     console.log(`  EKSİK: ${eposta.eksikNe()}`);
     baslik('=== SONUÇ: YAPILANDIRILMAMIŞ ===');
     console.log('  MAIL_KULLANICI ve/veya MAIL_SIFRE tanımlı değil, bu yüzden posta');
-    console.log('  gönderilmiyor. Uygulama bu durumda çökmüyor: şifre sıfırlama');
+    console.log('  gönderilmiyor. Uygulama bu durumda çökmüyor: parola sıfırlama');
     console.log('  bağlantısını sunucu terminaline yazıyor.');
     console.log('');
     console.log('  Gerçekten posta göndermek için backend/.env dosyasına EKLEYİN.');
@@ -114,15 +114,15 @@ async function main() {
     console.log('    MAIL_KULLANICI="hesabiniz@gmail.com"');
     console.log('    MAIL_SIFRE="16hanelikuygulamasifresi"');
     console.log('');
-    console.log('  Uygulama şifresi nasıl alınır: .env.example dosyasında yazıyor.');
+    console.log('  Uygulama parolası nasıl alınır: .env.example dosyasında yazıyor.');
     console.log('');
     return;
   }
 
   if (a.yontem === 'smtp' && a.sifreUzunlugu !== 16) {
     baslik('=== UYARI ===');
-    console.log(`  MAIL_SIFRE ${a.sifreUzunlugu} karakter. Google'ın uygulama şifreleri`);
-    console.log('  16 karakterdir. Boşluklu yapıştırılmış ya da normal hesap şifresi');
+    console.log(`  MAIL_SIFRE ${a.sifreUzunlugu} karakter. Google'ın uygulama parolaları`);
+    console.log('  16 karakterdir. Boşluklu yapıştırılmış ya da normal hesap parolası');
     console.log('  yazılmış olabilir. Yine de bağlantı denenecek.');
   }
 

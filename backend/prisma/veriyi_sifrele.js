@@ -7,7 +7,7 @@
 // Veri kaybolmadı ama şifreli DEĞİL, ve uygulama artık o alanı şifreli
 // beklediği için "v1:" öneki olmayan değeri çözemiyor ve boş sayıyor.
 //
-// Bu betik düz metin kalmış değerleri OLDUĞU YERDE şifreler.
+// Bu betik düz metin kalmış değerleri OLDUĞU YERDE parolaler.
 //
 // İKİ KEZ ÇALIŞTIRILABİLİR: "v1:" ile başlayan değerlere dokunmuyor. Yani
 // yarısında kesilse kalan yerden devam edilebilir, zarar vermez.
@@ -26,14 +26,14 @@ const prisma = new PrismaClient();
 
 const sifreliMi = (d) => typeof d === 'string' && d.startsWith('v1:');
 
-/** Düz metinse şifreler, zaten şifreliyse olduğu gibi bırakır. */
+/** Düz metinse parolaler, zaten şifreliyse olduğu gibi bırakır. */
 function gerekirseSifrele(deger) {
   if (deger === null || deger === undefined || deger === '') return { deger, degisti: false };
   if (sifreliMi(deger)) return { deger, degisti: false };
   return { deger: kripto.sifrele(String(deger)), degisti: true };
 }
 
-/** Bir kaydın verilen alanlarını şifreler; değişen alan varsa günceller. */
+/** Bir kaydın verilen alanlarını parolaler; değişen alan varsa günceller. */
 async function tabloyuSifrele(ad, kayitlar, alanlar, guncelle) {
   let degisen = 0;
   let dokunulmayan = 0;
@@ -52,7 +52,7 @@ async function tabloyuSifrele(ad, kayitlar, alanlar, guncelle) {
       dokunulmayan += 1;
     }
   }
-  console.log(`  ${ad.padEnd(14)} ${String(degisen).padStart(4)} kayıt şifrelendi, `
+  console.log(`  ${ad.padEnd(14)} ${String(degisen).padStart(4)} kayıt parolalendi, `
     + `${dokunulmayan} kayıt zaten şifreliydi`);
   return degisen;
 }
@@ -105,7 +105,7 @@ async function main() {
   // kalori bilgisi hâlâ onun verisi ve biz onun adına atamayız.
   const bagsiz = await prisma.diaryEntry.count({ where: { foodRef: null } });
 
-  console.log(`\n=== SONUÇ ===\n  ${toplam} kayıt şifrelendi.`);
+  console.log(`\n=== SONUÇ ===\n  ${toplam} kayıt parolalendi.`);
   if (bagsiz > 0) {
     console.log(`\n  UYARI: ${bagsiz} günlük kaleminin besin bağı yok.`);
     console.log('  Sebebi: göç sırasında foodId sütunu düşürüldü, hangi besin');

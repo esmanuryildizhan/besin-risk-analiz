@@ -28,7 +28,7 @@ function anahtarTuret(temelAnahtar) {
 /* ──────────────────────────────────────────────────────────────────────────
    NİYE ÖZETLEME DEĞİL ŞİFRELEME
    ──────────────────────────────────────────────────────────────────────────
-   Şifreyi bcrypt ile özetliyoruz çünkü geri okumamız gerekmiyor — kullanıcının
+   Parolayı bcrypt ile özetliyoruz çünkü geri okumamız gerekmiyor — kullanıcının
    girdiğiyle karşılaştırmak yeter. TOTP anahtarı öyle değil: sunucunun o anki
    kodu HESAPLAMASI için anahtarın kendisi lazım. Yani geri döndürülebilir
    olmalı, dolayısıyla şifreleme.

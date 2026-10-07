@@ -1,15 +1,16 @@
 // src/screens/SifreEkranlari.js
 //
-// Şifre sıfırlamanın iki ekranı:
+// Parola sıfırlamanın iki ekranı:
 //   SifremiUnuttumEkrani — e-posta alır, bağlantı gönderilmesini ister
-//   SifreYenileEkrani    — postadaki bağlantıdan açılır, yeni şifreyi belirler
+//   SifreYenileEkrani    — postadaki bağlantıdan açılır, yeni parolayı belirler
 
 import React, { useEffect, useState } from 'react';
 import {
   AlertCircle, CheckCircle, ChevronRight, KeyRound, Loader2, Lock, Mail, Shield,
 } from 'lucide-react';
 import { api, tokenKaydet } from '../api';
-import { HataKutusu } from '../components/ortak';
+import { HataKutusu, ParolaKurallari } from '../components/ortak';
+import { tumKurallarTamamMi } from '../parolaKurali';
 
 const Kutu = ({ simge: Simge, baslik, aciklama, children }) => (
   <div className="w-full min-h-screen flex items-center justify-center bg-[#F8F9FA] p-4">
@@ -118,7 +119,7 @@ export const SifremiUnuttumEkrani = ({ onGeri }) => {
       <Kutu
         simge={CheckCircle}
         baslik="Bağlantı gönderildi"
-        aciklama={`${email} adresi kayıtlıysa, şifre sıfırlama bağlantısı gönderildi. `
+        aciklama={`${email} adresi kayıtlıysa, parola sıfırlama bağlantısı gönderildi. `
           + 'Bağlantı 60 dakika geçerlidir ve yalnızca bir kez kullanılabilir.'}
       >
         <p className="text-xs text-gray-500 text-center leading-relaxed mb-5">
@@ -132,8 +133,8 @@ export const SifremiUnuttumEkrani = ({ onGeri }) => {
   return (
     <Kutu
       simge={KeyRound}
-      baslik="Şifremi Unuttum"
-      aciklama="Hesabınızın e-posta adresini girin. Yeni şifre belirlemeniz için bir bağlantı gönderilecek."
+      baslik="Parolamı Unuttum"
+      aciklama="Hesabınızın e-posta adresini girin. Yeni parola belirlemeniz için bir bağlantı gönderilecek."
     >
       <div className="relative">
         <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
@@ -160,7 +161,7 @@ export const SifremiUnuttumEkrani = ({ onGeri }) => {
   );
 };
 
-/* ──────────────────── ADIM 2: yeni şifreyi belirle ──────────────────── */
+/* ──────────────────── ADIM 2: yeni parolayı belirle ──────────────────── */
 
 export const SifreYenileEkrani = ({ bilet, onBitti }) => {
   const [sifre, setSifre] = useState('');
@@ -174,9 +175,9 @@ export const SifreYenileEkrani = ({ bilet, onBitti }) => {
   const kaydet = async () => {
     // Tekrar alanı SUNUCUDA denetlenmiyor, denetlenmesi de gerekmiyor:
     // amacı güvenlik değil, kullanıcının yazım hatasıyla kendini kilitlemesini
-    // önlemek. Sunucu şifrenin uzunluğuna bakıyor.
-    if (sifre !== tekrar) { setHata('İki şifre birbiriyle aynı değil.'); return; }
-    if (sifre.length < 8) { setHata('Şifre en az 8 karakter olmalı.'); return; }
+    // önlemek. Sunucu parolanın uzunluğuna bakıyor.
+    if (sifre !== tekrar) { setHata('İki parola birbiriyle aynı değil.'); return; }
+    if (!tumKurallarTamamMi(sifre)) { setHata('Parola aşağıdaki kuralların tümünü karşılamalı.'); return; }
 
     setHata(''); setBekliyor(true);
     try {
@@ -200,22 +201,22 @@ export const SifreYenileEkrani = ({ bilet, onBitti }) => {
     return (
       <Kutu
         simge={CheckCircle}
-        baslik="Şifreniz güncellendi"
-        aciklama="Yeni şifrenizle giriş yapabilirsiniz. Açık kalan diğer tüm oturumlar kapatıldı."
+        baslik="Parolanız güncellendi"
+        aciklama="Yeni parolanızla giriş yapabilirsiniz. Açık kalan diğer tüm oturumlar kapatıldı."
       >
         <button onClick={onBitti} className={dugmeStili}>Giriş yap</button>
       </Kutu>
     );
   }
 
-  // 2FA AŞAMASI: şifre alanları gizleniyor ki kullanıcı hangi adımda
+  // 2FA AŞAMASI: parola alanları gizleniyor ki kullanıcı hangi adımda
   // olduğunu karıştırmasın (giriş ekranındaki aynı yaklaşım).
   if (kodGerekli) {
     return (
       <Kutu
         simge={Shield}
         baslik="Doğrulama Kodu"
-        aciklama={'Bu hesapta iki aşamalı doğrulama açık. Şifreyi değiştirmek için '
+        aciklama={'Bu hesapta iki aşamalı doğrulama açık. Parolayı değiştirmek için '
           + 'doğrulayıcı uygulamadaki 6 haneli kodu girin.'}
       >
         <input
@@ -242,23 +243,24 @@ export const SifreYenileEkrani = ({ bilet, onBitti }) => {
   return (
     <Kutu
       simge={Lock}
-      baslik="Yeni Şifre"
-      aciklama="En az 8 karakterli yeni bir şifre belirleyin."
+      baslik="Yeni Parola"
+      aciklama="Aşağıdaki kuralların tümünü karşılayan yeni bir parola belirleyin."
     >
       <div className="space-y-5">
         <div className="relative">
           <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
           <input
             type="password" value={sifre} onChange={(e) => setSifre(e.target.value)}
-            placeholder="Yeni şifre" autoFocus className={girdiStili}
+            placeholder="Yeni parola" autoFocus autoComplete="new-password" className={girdiStili}
           />
         </div>
+        <ParolaKurallari parola={sifre} />
         <div className="relative">
           <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
           <input
             type="password" value={tekrar} onChange={(e) => setTekrar(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && kaydet()}
-            placeholder="Yeni şifre (tekrar)" className={girdiStili}
+            placeholder="Yeni parola (tekrar)" autoComplete="new-password" className={girdiStili}
           />
         </div>
 

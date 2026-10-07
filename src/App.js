@@ -33,7 +33,7 @@ export default function App() {
   //
   // Bilet HEMEN adres satırından siliniyor (replaceState): tarayıcı geçmişinde
   // ve ekran görüntüsünde kalmasın, kullanıcı adresi kopyalayıp paylaşırsa
-  // şifre sıfırlama yetkisini paylaşmış olmasın.
+  // parola sıfırlama yetkisini paylaşmış olmasın.
   //
   // İKİ ADRES VAR: /sifre-yenile ve /eposta-dogrula. İkisi de aynı kalıpla
   // okunuyor, bu yüzden tek yardımcı.
@@ -76,7 +76,7 @@ export default function App() {
   }
 
   // Sıfırlama bağlantısıyla gelindiyse her şeyin önüne geçiyor: kullanıcının
-  // elinde geçerli bir bilet varsa yapmak istediği tek şey şifresini
+  // elinde geçerli bir bilet varsa yapmak istediği tek şey parolasını
   // değiştirmek.
   if (sifirlamaBileti) {
     return (

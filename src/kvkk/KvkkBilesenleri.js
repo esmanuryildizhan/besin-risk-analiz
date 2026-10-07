@@ -279,7 +279,7 @@ export const VeriIndirme = () => {
         Hakkınızda saklanan tüm kişisel veriyi makine tarafından okunabilir
         biçimde (JSON) indirebilirsiniz: hesap bilgileriniz, hastalık ve alerji
         kayıtlarınız, tahlil sonuçlarınız, günlük takip kayıtlarınız ve onay
-        tarihleriniz. Şifreniz ve iki aşamalı doğrulama anahtarınız dosyaya
+        tarihleriniz. Parolanız ve iki aşamalı doğrulama anahtarınız dosyaya
         dâhil edilmez; bunlar kimlik doğrulama bilgisidir.
       </p>
       <HataKutusu mesaj={hata} />
@@ -328,10 +328,10 @@ export const HesapSilme = ({ onSilindi }) => {
       ) : (
         <div className="space-y-3">
           <p className="text-sm font-semibold text-gray-700">
-            Onaylamak için şifrenizi girin:
+            Onaylamak için parolanızı girin:
           </p>
           <input type="password" value={sifre} onChange={(e) => setSifre(e.target.value)}
-            placeholder="Şifreniz" autoComplete="current-password"
+            placeholder="Parolanız" autoComplete="current-password"
             className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-red-400" />
           <HataKutusu mesaj={hata} />
           <div className="flex flex-wrap gap-3">

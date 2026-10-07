@@ -3,6 +3,7 @@
 // Birden çok ekranın kullandığı küçük bileşenler ve risk seviyesi stilleri.
 
 import React, { useId, useState } from 'react';
+import { KURALLAR } from '../parolaKurali';
 import {
   Search, AlertCircle, AlertTriangle, X, CheckCircle, Utensils,
   Loader2, ShieldAlert,
@@ -155,3 +156,34 @@ export const SecimKutusu = ({ label, secenekler, secili, onEkle, onCikar }) => {
 /* ==========================================================================
    GİRİŞ / KAYIT
    ========================================================================== */
+
+/**
+ * Parola kurallarının anlık durumu.
+ *
+ * NİYE SADECE METİN DEĞİL, ANLIK: kural listesi statik yazılsaydı kullanıcı
+ * hangi şartı karşılamadığını ancak gönderip hata alınca öğrenirdi. Burada
+ * her tuş vuruşunda hangi maddenin tamam olduğu görünüyor.
+ *
+ * aria-live="polite": ekran okuyucu kullanan biri de durum değiştikçe haber
+ * alıyor; yoksa yeşile dönen maddeler yalnızca görenlere bilgi verirdi.
+ * "polite" seçildi ki her harfte kullanıcının sözünü kesmesin.
+ */
+export const ParolaKurallari = ({ parola }) => (
+  <ul className="mt-2 space-y-1" aria-live="polite">
+    {KURALLAR.map((k) => {
+      const tamam = k.sina(parola || '');
+      return (
+        <li
+          key={k.kod}
+          className={`text-xs flex items-center gap-2 ${tamam ? 'text-green-700' : 'text-gray-500'}`}
+        >
+          {/* İşaret yalnızca renkle değil, SİMGEYLE de veriliyor (WCAG 1.4.1):
+              renk körü bir kullanıcı yeşil/griyi ayırt edemeyebilir. */}
+          <span aria-hidden="true">{tamam ? '✓' : '○'}</span>
+          <span className="sr-only">{tamam ? 'tamam:' : 'eksik:'}</span>
+          {k.metin}
+        </li>
+      );
+    })}
+  </ul>
+);

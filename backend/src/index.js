@@ -10,7 +10,7 @@
 //   POST /api/eposta/dogrula  kayıt sonrası adres doğrulama
 //   POST /api/eposta/tekrar-gonder  yeni doğrulama bağlantısı
 //   POST /api/sifre/unuttum   sıfırlama bağlantısı istenir
-//   POST /api/sifre/yenile    bağlantıdaki biletle yeni şifre
+//   POST /api/sifre/yenile    bağlantıdaki biletle yeni parola
 //   POST /api/2fa/baslat      2FA kurulumunu başlat       (token gerekir)
 //   POST /api/2fa/dogrula     kurulumu kodla onayla       (token gerekir)
 //   POST /api/2fa/kapat       2FA'yı kapat                (token gerekir)
@@ -53,6 +53,8 @@ const {
 // Çeviri ortak dosyada: denetim araçları da aynısını kullanıyor (bkz. kural_cevir.js).
 const { kuraliCoz } = require('./kural_cevir');
 const KVKK = require('./kvkk_metinleri');
+const parolaKurali = require('./parola_kurali');
+const { sizintiKontrol } = require('./parola_sizinti');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const totp = require('./totp');
@@ -104,7 +106,7 @@ app.set('trust proxy', 1);
 /**
  * Hız sınırlayıcılar — kaba kuvvet ve kaynak tüketimi saldırılarına karşı.
  *
- * Giriş/kayıt ayrı ve dar tutuluyor: şifre deneme saldırısının asıl hedefi
+ * Giriş/kayıt ayrı ve dar tutuluyor: parola deneme saldırısının asıl hedefi
  * orası. Sağlık verisi tutan bir uygulamada bir hesabın ele geçirilmesi,
  * hastalık ve tahlil bilgilerinin ele geçirilmesi demek.
  */
@@ -117,7 +119,7 @@ const girisSinirlayici = rateLimit({
   skipSuccessfulRequests: true, // başarılı girişler sayılmıyor
 });
 
-// Şifre sıfırlama ayrı ve DAHA SIKI sınırlanıyor: her istek bir e-posta
+// Parola sıfırlama ayrı ve DAHA SIKI sınırlanıyor: her istek bir e-posta
 // gönderiyor. Sınır olmasaydı bu uç nokta başkasının posta kutusunu
 // doldurmak için kullanılabilirdi (ve posta hesabı günlük kotayı aşardı).
 const sifirlamaSinirlayici = rateLimit({
@@ -130,6 +132,17 @@ const sifirlamaSinirlayici = rateLimit({
 
 // PDF ayrıştırma CPU yiyor (pdfjs). Dosya en çok 3 MB (bkz. PDF_SINIRI),
 // ayrıca sayfa sınırı ve zaman aşımı var (bkz. tahlil_ayristir.js).
+// Parola değiştirme: mevcut parolayı deneyerek bulmaya çalışan biri için
+// ayrı ve sıkı sınır. Giriş sınırlayıcısı burada işe yaramaz, çünkü saldırgan
+// zaten geçerli bir oturum tokenıyla geliyor.
+const parolaSinirlayici = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  message: { error: 'Çok fazla parola değiştirme denemesi. Bir saat sonra tekrar deneyin.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const pdfSinirlayici = rateLimit({
   windowMs: 60 * 60 * 1000,     // 1 saat
   limit: 20,
@@ -218,7 +231,7 @@ async function kullaniciyiCoz(req, _res, next) {
       // HS256 kabul ediyoruz.
       const veri = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
       // GÜVENLİK: iki aşamalı doğrulamanın ARA bileti buraya giremez.
-      // O bilet de userId taşıyor; bu kontrol olmasaydı, şifreyi bilen ama
+      // O bilet de userId taşıyor; bu kontrol olmasaydı, parolayı bilen ama
       // 2FA kodunu giremeyen biri ara biletle tam erişim alırdı — yani 2FA
       // hiçbir işe yaramazdı.
       if (veri.asama === '2fa') return next();
@@ -272,7 +285,7 @@ const TOTP_TEMEL = process.env.TOTP_ANAHTARI || JWT_SECRET;
    biçim ("es***@gmail.com") saldırının hangi hesaba yöneldiğini anlamaya
    yetiyor, kimliği ortaya koymuyor — amaçla sınırlı veri işleme (KVKK m.4).
 
-   ŞİFRE, KOD VE BİLET ASLA YAZILMIYOR. Günlükte düz şifre tutmak,
+   ŞİFRE, KOD VE BİLET ASLA YAZILMIYOR. Günlükte düz parola tutmak,
    veritabanında tutmaktan farksızdır.
 */
 function adresiMaskele(adres) {
@@ -290,10 +303,10 @@ function guvenlikGunlugu(olay, req, ek = '') {
 }
 
 /**
- * Şifre doğru ama 2FA açıksa verilen KISA ÖMÜRLÜ bilet.
+ * Parola doğru ama 2FA açıksa verilen KISA ÖMÜRLÜ bilet.
  *
  * Normal oturum biletinden ayrı tutuluyor (`asama: '2fa'`), çünkü bu bilet
- * hiçbir veriye erişim vermemeli — yalnızca "şifreyi doğru girdim" demeli.
+ * hiçbir veriye erişim vermemeli — yalnızca "parolayı doğru girdim" demeli.
  * 5 dakika içinde kod girilmezse baştan başlanır.
  */
 /**
@@ -301,7 +314,7 @@ function guvenlikGunlugu(olay, req, ek = '') {
  *
  * SÜRE 1 GÜN. Önceden 7 gündü. Bilet imzalıdır, yani sunucu onu geri
  * çağıramaz: çalınan bir bilet süresi dolana kadar geçerli kalır. Bu yüzden
- * süre, kullanıcıyı her gün şifre sormakla yormamakla çalıntı biletin
+ * süre, kullanıcıyı her gün parola sormakla yormamakla çalıntı biletin
  * kullanılabileceği pencereyi kısaltmak arasındaki denge.
  *
  * "Oturumu kapat" dendiğinde bilet tarayıcıdan siliniyor ve kullanıcı yeniden
@@ -321,7 +334,7 @@ function geciciBilet(userId) {
  * tek kullanımlık yedek kodlar.
  *
  * NİYE AYRI FONKSİYON: aynı denetim iki yerde gerekiyor — girişin ikinci
- * aşamasında ve şifre sıfırlamada. İki kopya kalsaydı birinde yapılan
+ * aşamasında ve parola sıfırlamada. İki kopya kalsaydı birinde yapılan
  * düzeltme ötekine geçmezdi.
  */
 async function ikinciAsamaDogru(user, kod) {
@@ -411,6 +424,27 @@ function tahliliCoz(satir) {
   };
 }
 
+/**
+ * Parola kuralını uygular. Kayıt, sıfırlama ve değiştirme ÜÇÜ de burayı
+ * çağırıyor; üç yerde ayrı yazılsaydı biri güncellenip diğerleri unutulurdu.
+ *
+ * Sızıntı kontrolü kompozisyon kuralından SONRA yapılıyor: zaten geçersiz bir
+ * parola için ağ isteği atmanın anlamı yok.
+ *
+ * @returns {Promise<string|null>} hata mesajı, sorun yoksa null
+ */
+async function parolaSorunu(parola, kisi) {
+  const sonuc = parolaKurali.parolaDenetle(parola, kisi);
+  if (!sonuc.gecerli) return parolaKurali.hataMetni(sonuc);
+
+  const sizinti = await sizintiKontrol(parola);
+  if (sizinti.bakildi && sizinti.sizmis) {
+    return 'Bu parola bilinen veri ihlallerinde geçiyor ve saldırganların '
+      + 'deneme listelerinde bulunuyor. Lütfen başka bir parola seçin.';
+  }
+  return null;
+}
+
 function sunucuHatasi(res, hata, nerede) {
   console.error(`[HATA] ${nerede}:`, hata);
   res.status(500).json({ error: 'Beklenmeyen bir sunucu hatası oluştu.' });
@@ -442,7 +476,7 @@ function kullaniciyiDondur(user) {
     diet: user.diet,
     allergies: user.allergies ? cozVeDenetle(user.allergies, 'alerji', user.id) : [],
     diseases: user.diseases ? cozVeDenetle(user.diseases, 'hastalık', user.id) : [],
-    // Arayüz buna bakıp onay ekranını gösteriyor. Şifre özeti gibi hassas
+    // Arayüz buna bakıp onay ekranını gösteriyor. Parola özeti gibi hassas
     // alanlar burada YOK — bu fonksiyon "dışarı ne çıkar" kapısı.
     onayGerekli: onayGerekliMi(user),
     rizaSurumu: user.rizaSurumu || null,
@@ -478,7 +512,7 @@ app.post('/api/register', girisSinirlayici, async (req, res) => {
       aydinlatmaOkundu, acikRiza,
     } = req.body;
     if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Ad, e-posta ve şifre zorunludur.' });
+      return res.status(400).json({ error: 'Ad, e-posta ve parola zorunludur.' });
     }
     // KVKK: sağlık verisi özel nitelikli kişisel veridir ve bu uygulamada
     // işlemenin tek hukuki dayanağı açık rızadır. Rıza yoksa kayıt da yok.
@@ -494,9 +528,8 @@ app.post('/api/register', girisSinirlayici, async (req, res) => {
           + 'değerlendirme yapmak olduğu için, bu veriler olmadan çalışamıyor.',
       });
     }
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı.' });
-    }
+    const parolaHatasi = await parolaSorunu(password, { eposta: email, ad: name, soyad: surname });
+    if (parolaHatasi) return res.status(400).json({ error: parolaHatasi });
     // HESAP SAYIMI (account enumeration) KAPATILDI.
     // Eskiden burada 409 "Bu e-posta zaten kayıtlı" dönüyordu; bu, bir adresin
     // sistemde olup olmadığını sorgulamaya yarıyordu. Sağlık verisi tutan bir
@@ -517,7 +550,7 @@ app.post('/api/register', girisSinirlayici, async (req, res) => {
       return res.status(201).json(ayniYanit);
     }
 
-    // Şifreyi ASLA düz metin saklamıyoruz; bcrypt ile hash'liyoruz.
+    // Parolayı ASLA düz metin saklamıyoruz; bcrypt ile hash'liyoruz.
     const passwordHash = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
@@ -552,16 +585,16 @@ app.post('/api/login', girisSinirlayici, async (req, res) => {
       where: { email: email || '' },
       include: { allergies: true, diseases: true },
     });
-    // Güvenlik: "e-posta yok" ile "şifre yanlış" ayrımını dışarıya vermiyoruz.
-    // HESAP KİLİDİ — şifre KONTROL EDİLMEDEN önce bakılıyor. Sonra bakılsaydı
-    // kilitli hesapta bile şifre denemesi yapılabilir, kilit işe yaramazdı.
+    // Güvenlik: "e-posta yok" ile "parola yanlış" ayrımını dışarıya vermiyoruz.
+    // HESAP KİLİDİ — parola KONTROL EDİLMEDEN önce bakılıyor. Sonra bakılsaydı
+    // kilitli hesapta bile parola denemesi yapılabilir, kilit işe yaramazdı.
     if (user && kilitliMi(user.kilitBitisi)) {
       const kalanDk = Math.ceil((user.kilitBitisi - Date.now()) / 60000);
       guvenlikGunlugu('kilitli hesaba giriş denemesi', req,
         `hesap=${adresiMaskele(email)}`);
       return res.status(429).json({
         error: `Çok fazla hatalı deneme yapıldı. Bu hesap ${kalanDk} dakika sonra `
-          + 'yeniden denenebilir. Şifrenizi hatırlamıyorsanız "Şifremi unuttum" '
+          + 'yeniden denenebilir. Parolanızı hatırlamıyorsanız "Parolamı unuttum" '
           + 'bağlantısını kullanabilirsiniz.',
       });
     }
@@ -585,16 +618,16 @@ app.post('/api/login', girisSinirlayici, async (req, res) => {
         }
       }
       // Hesabın var olup olmadığı günlüğe YAZILIYOR (kullanıcıya değil):
-      // "kayıtlı olmayan adreslere deneme" ile "kayıtlı hesaba şifre deneme"
+      // "kayıtlı olmayan adreslere deneme" ile "kayıtlı hesaba parola deneme"
       // farklı saldırılar ve ayırt edilmeleri gerekiyor.
       guvenlikGunlugu('giriş başarısız', req,
         `hesap=${adresiMaskele(email)} kayıtlı=${user ? 'evet' : 'hayır'}`);
-      return res.status(401).json({ error: 'E-posta veya şifre hatalı.' });
+      return res.status(401).json({ error: 'E-posta veya parola hatalı.' });
     }
 
     // E-POSTA DOĞRULANMAMIŞSA İÇERİ ALINMIYOR.
-    // Şifre doğru olduğu için burada "bu hesap var" bilgisini vermiş oluyoruz;
-    // sakıncası yok, çünkü şifreyi bilen zaten hesabın sahibi ya da şifreyi ele
+    // Parola doğru olduğu için burada "bu hesap var" bilgisini vermiş oluyoruz;
+    // sakıncası yok, çünkü parolayı bilen zaten hesabın sahibi ya da parolayı ele
     // geçirmiş biri — ikisi de hesabın varlığını zaten biliyor.
     if (!user.ePostaDogrulandiAt) {
       return res.status(403).json({
@@ -607,9 +640,9 @@ app.post('/api/login', girisSinirlayici, async (req, res) => {
     // Başarılı giriş: sayacı sıfırlıyor, son hareketi damgalıyor ve varsa
     // silme uyarısını kaldırıyor — kullanıcı döndüyse hesap kurtulmuş olur.
     //
-    // DAMGA 2FA'DAN ÖNCE ATILIYOR, bilerek: şifresini doğru giren ama
+    // DAMGA 2FA'DAN ÖNCE ATILIYOR, bilerek: parolasını doğru giren ama
     // doğrulayıcı uygulamasıyla uğraşan bir kullanıcı o sırada hesabı
-    // silinecek diye telaşa düşmemeli. Şifreyi bilmek zaten hareket
+    // silinecek diye telaşa düşmemeli. Parolayı bilmek zaten hareket
     // sayılacak kadar güçlü bir işaret.
     await prisma.user.update({
       where: { id: user.id },
@@ -624,7 +657,7 @@ app.post('/api/login', girisSinirlayici, async (req, res) => {
     // Süpürme beklenmiyor: kullanıcının girişini yavaşlatmamalı.
     saklamaSuresiniUygula();
 
-    // 2FA açıksa oturum bileti BURADA verilmiyor. Şifre doğru olsa bile
+    // 2FA açıksa oturum bileti BURADA verilmiyor. Parola doğru olsa bile
     // kullanıcı henüz içeri girmiş sayılmıyor; yalnızca ikinci aşamaya
     // geçme hakkı kazanıyor.
     if (user.totpEnabled) {
@@ -668,9 +701,9 @@ app.post('/api/login/2fa', girisSinirlayici, async (req, res) => {
     if (!user || !user.totpEnabled) return res.status(401).json({ error: 'Geçersiz istek.' });
 
     if (!await ikinciAsamaDogru(user, kod)) {
-      // Şifre DOĞRU girilmiş ama kod tutmuyor: şifrenin sızdığına işaret
+      // Parola DOĞRU girilmiş ama kod tutmuyor: parolanın sızdığına işaret
       // olabileceği için ayrı kaydediliyor.
-      guvenlikGunlugu('2FA kodu hatalı (şifre doğruydu)', req,
+      guvenlikGunlugu('2FA kodu hatalı (parola doğruydu)', req,
         `hesap=${adresiMaskele(user.email)}`);
       return res.status(401).json({ error: 'Kod hatalı.' });
     }
@@ -693,7 +726,7 @@ app.post('/api/login/2fa', girisSinirlayici, async (req, res) => {
    ──────────────────────────────────────────────────────────────────────────
 
    AKIŞ: kullanıcı e-postasını yazar -> posta kutusuna tek kullanımlık bağlantı
-   gider -> bağlantıdan yeni şifre belirlenir.
+   gider -> bağlantıdan yeni parola belirlenir.
 
    ÜÇ TASARIM KARARI:
 
@@ -703,12 +736,12 @@ app.post('/api/login/2fa', girisSinirlayici, async (req, res) => {
       "şu kişi buraya kayıtlı" bilgisi başlı başına ifşadır.
 
    2. 2FA AÇIKSA KOD DA İSTENİYOR. İstenmezse, posta kutusunu ele geçiren biri
-      şifreyi sıfırlayıp içeri girebilirdi — yani 2FA'nın koruması posta
+      parolayı sıfırlayıp içeri girebilirdi — yani 2FA'nın koruması posta
       kutusunun güvenliğine inerdi. Kod istenince saldırganın hem posta
       kutusuna hem telefona erişmesi gerekiyor.
 
    3. ŞİFRE DEĞİŞİNCE TÜM ESKİ OTURUMLAR KAPANIYOR (oturumlarGecersizAt).
-      Hesabı ele geçiren biri varsa şifre sıfırlamak onu gerçekten dışarı
+      Hesabı ele geçiren biri varsa parola sıfırlamak onu gerçekten dışarı
       atıyor; yoksa elindeki bilet süresi dolana kadar içeride kalırdı.
 */
 
@@ -850,7 +883,7 @@ app.post('/api/eposta/dogrula', girisSinirlayici, async (req, res) => {
     ]);
 
     // DOĞRULAMADAN SONRA DOĞRUDAN İÇERİ ALINIYOR: kullanıcı az önce hem
-    // şifreyi belirlemiş hem adresin kendisine ait olduğunu kanıtlamış.
+    // parolayı belirlemiş hem adresin kendisine ait olduğunu kanıtlamış.
     // Yeniden giriş istemek gereksiz bir adım olurdu.
     //
     // 2FA açıksa bu kısayol KAPALI: o kullanıcı ikinci aşamayı geçmeden
@@ -893,7 +926,7 @@ app.post('/api/eposta/tekrar-gonder', sifirlamaSinirlayici, async (req, res) => 
 app.post('/api/sifre/unuttum', sifirlamaSinirlayici, async (req, res) => {
   // YANIT HER DURUMDA AYNI (bkz. yukarıdaki 1. karar).
   const ayniYanit = {
-    mesaj: 'Eğer bu e-posta adresi kayıtlıysa, şifre sıfırlama bağlantısı gönderildi. '
+    mesaj: 'Eğer bu e-posta adresi kayıtlıysa, parola sıfırlama bağlantısı gönderildi. '
       + 'Posta kutunuzu kontrol edin.',
   };
   try {
@@ -943,9 +976,7 @@ app.post('/api/sifre/yenile', girisSinirlayici, async (req, res) => {
   try {
     const { bilet, password, kod } = req.body;
     if (!bilet) return res.status(400).json({ error: 'Sıfırlama bileti gerekli.' });
-    if (!password || String(password).length < 8) {
-      return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı.' });
-    }
+    if (!password) return res.status(400).json({ error: 'Yeni parola gerekli.' });
 
     const kayit = await prisma.passwordReset.findUnique({
       where: { tokenOzeti: biletOzeti(String(bilet)) },
@@ -956,7 +987,7 @@ app.post('/api/sifre/yenile', girisSinirlayici, async (req, res) => {
     // söylemek, geçerli bilet aramaya yarayacak bilgi verirdi.
     const gecersiz = !kayit || kayit.usedAt || kayit.expiresAt < new Date();
     if (gecersiz) {
-      guvenlikGunlugu('geçersiz şifre sıfırlama bileti', req,
+      guvenlikGunlugu('geçersiz parola sıfırlama bileti', req,
         kayit ? 'sebep=kullanılmış/süresi dolmuş' : 'sebep=bilet yok');
       return res.status(400).json({
         error: 'Bu sıfırlama bağlantısı geçersiz ya da süresi dolmuş. Yeniden talep edin.',
@@ -972,8 +1003,16 @@ app.post('/api/sifre/yenile', girisSinirlayici, async (req, res) => {
       }
     }
 
+    // Kural denetimi burada, bilet doğrulandıktan SONRA: kişisel bilgi
+    // denetimi kullanıcının adını ve e-postasını gerektiriyor, onu da ancak
+    // biletin kime ait olduğunu bilince öğreniyoruz.
+    const kuralHatasi = await parolaSorunu(String(password), {
+      eposta: kayit.user.email, ad: kayit.user.name, soyad: kayit.user.surname,
+    });
+    if (kuralHatasi) return res.status(400).json({ error: kuralHatasi });
+
     const yeniOzet = await bcrypt.hash(String(password), 10);
-    // Tek işlem: şifre değişiyor, bilet kullanılmış damgası yiyor, eski
+    // Tek işlem: parola değişiyor, bilet kullanılmış damgası yiyor, eski
     // oturumlar geçersiz kılınıyor. Biri olup biri olmazsa tutarsız kalırdı.
     await prisma.$transaction([
       prisma.user.update({
@@ -985,8 +1024,8 @@ app.post('/api/sifre/yenile', girisSinirlayici, async (req, res) => {
           // demektir; adresin sahipliği zaten kanıtlanmış oluyor. Ayrıca
           // doğrulama istemek kullanıcıyı boşuna bir adıma sokardı.
           ePostaDogrulandiAt: new Date(),
-          // Kilidi de açıyoruz: şifresini unutup kilitlenen kullanıcı,
-          // şifresini yenileyince beklemek zorunda kalmamalı.
+          // Kilidi de açıyoruz: parolasını unutup kilitlenen kullanıcı,
+          // parolasını yenileyince beklemek zorunda kalmamalı.
           basarisizGiris: 0,
           kilitBitisi: null,
         },
@@ -997,7 +1036,7 @@ app.post('/api/sifre/yenile', girisSinirlayici, async (req, res) => {
       }),
     ]);
 
-    res.json({ mesaj: 'Şifreniz güncellendi. Yeni şifrenizle giriş yapabilirsiniz.' });
+    res.json({ mesaj: 'Parolanız güncellendi. Yeni parolanızla giriş yapabilirsiniz.' });
   } catch (hata) {
     sunucuHatasi(res, hata, '/api/sifre/yenile');
   }
@@ -1053,12 +1092,80 @@ app.post('/api/2fa/dogrula', girisGerekli, async (req, res) => {
   }
 });
 
-/** Kapatır. Şifre isteniyor: biletini ele geçiren biri korumayı kaldıramasın. */
+/* ──────────────────────── PAROLA DEĞİŞTİRME ────────────────────────
+   Oturum açıkken parola değiştirme.
+
+   MEVCUT PAROLA NEDEN SORULUYOR: kullanıcı bilgisayarını kilitlemeden
+   kalktıysa ya da biri oturum tokenını ele geçirdiyse, parola değiştirme
+   hesabı KALICI olarak devralmaya yarar (saldırgan yeni parolayı belirler,
+   gerçek sahip dışarıda kalır). Mevcut parola şartı bunu engelliyor.
+
+   2FA AÇIKSA KOD DA İSTENİYOR: aynı gerekçe. 2FA'nın anlamı "tokenı olan
+   her şeyi yapamaz" demek; parola değiştirme en kritik işlemlerden biri.
+
+   DEĞİŞİKLİKTEN SONRA DİĞER OTURUMLAR KAPANIYOR: parola değiştirmenin
+   başlıca sebebi "parolam ele geçmiş olabilir". Eski oturumlar açık kalırsa
+   saldırgan içeride kalmaya devam ederdi. Kullanıcının KENDİ oturumu açık
+   kalsın diye yeni bir token dönülüyor.
+*/
+app.post('/api/parola/degistir', girisGerekli, parolaSinirlayici, async (req, res) => {
+  try {
+    const { mevcutParola, yeniParola, kod } = req.body || {};
+    if (!mevcutParola || !yeniParola) {
+      return res.status(400).json({ error: 'Mevcut ve yeni parola gerekli.' });
+    }
+
+    const dogruMu = await bcrypt.compare(String(mevcutParola), req.kullanici.passwordHash);
+    if (!dogruMu) {
+      guvenlikGunlugu('parola değiştirmede mevcut parola hatalı', req,
+        `kullanici=${req.kullanici.id}`);
+      return res.status(401).json({ error: 'Mevcut parolanız hatalı.' });
+    }
+
+    if (req.kullanici.totpEnabled) {
+      if (!kod) return res.status(200).json({ ikinciAsama: true });
+      if (!await ikinciAsamaDogru(req.kullanici, kod)) {
+        return res.status(401).json({ error: 'Doğrulama kodu hatalı.' });
+      }
+    }
+
+    if (String(yeniParola) === String(mevcutParola)) {
+      return res.status(400).json({ error: 'Yeni parola eskisiyle aynı olamaz.' });
+    }
+
+    const kuralHatasi = await parolaSorunu(String(yeniParola), {
+      eposta: req.kullanici.email, ad: req.kullanici.name, soyad: req.kullanici.surname,
+    });
+    if (kuralHatasi) return res.status(400).json({ error: kuralHatasi });
+
+    const damga = new Date();
+    await prisma.user.update({
+      where: { id: req.kullanici.id },
+      data: {
+        passwordHash: await bcrypt.hash(String(yeniParola), 10),
+        oturumlarGecersizAt: damga,
+      },
+    });
+    guvenlikGunlugu('parola değiştirildi', req, `kullanici=${req.kullanici.id}`);
+
+    // Damgadan SONRA üretilen token geçerli kalıyor; kullanıcı dışarı atılmıyor
+    // ama diğer cihazlardaki oturumlar kapanıyor.
+    res.json({
+      degisti: true,
+      token: oturumBileti(req.kullanici.id),
+      mesaj: 'Parolanız güncellendi. Diğer cihazlardaki oturumlar kapatıldı.',
+    });
+  } catch (hata) {
+    sunucuHatasi(res, hata, '/api/parola/degistir');
+  }
+});
+
+/** Kapatır. Parola isteniyor: biletini ele geçiren biri korumayı kaldıramasın. */
 app.post('/api/2fa/kapat', girisGerekli, async (req, res) => {
   try {
     const { password } = req.body || {};
     const dogruMu = password ? await bcrypt.compare(password, req.kullanici.passwordHash) : false;
-    if (!dogruMu) return res.status(401).json({ error: 'Şifrenizi doğru girmeniz gerekiyor.' });
+    if (!dogruMu) return res.status(401).json({ error: 'Parolanızı doğru girmeniz gerekiyor.' });
 
     await prisma.user.update({
       where: { id: req.kullanici.id },
@@ -1172,7 +1279,7 @@ app.post('/api/onay', girisGerekli, async (req, res) => {
  * Hesabı ve BÜTÜN kişisel verileri siler (KVKK m.11/e — silme hakkı;
  * aynı zamanda açık rızanın geri çekilmesinin karşılığı).
  *
- * Şifre tekrar soruluyor: tokenı ele geçiren birinin hesabı silebilmesi
+ * Parola tekrar soruluyor: tokenı ele geçiren birinin hesabı silebilmesi
  * kabul edilemez, ve işlem geri alınamaz.
  *
  * Silme sırası önemli: şemada cascade yok, bu yüzden önce çocuk kayıtlar
@@ -1221,7 +1328,7 @@ app.get('/api/me/verilerim', girisGerekli, async (req, res) => {
         + 'GDPR m.15 ve m.20).',
       olusturulmaZamani: new Date().toISOString(),
       iceriginDisindaKalanlar: [
-        'Şifrenizin bcrypt özeti — kimlik doğrulama sırrıdır, kişisel bilgi değildir.',
+        'Parolanızın bcrypt özeti — kimlik doğrulama sırrıdır, kişisel bilgi değildir.',
         'İki aşamalı doğrulama gizli anahtarı ve yedek kodlarınız — aynı sebeple.',
         'Besin değerleri tablosu — TürKomp kaynaklı genel veridir, size ait değildir.',
       ],
@@ -1284,7 +1391,7 @@ app.delete('/api/me', girisGerekli, async (req, res) => {
       ? await bcrypt.compare(password, req.kullanici.passwordHash)
       : false;
     if (!dogruMu) {
-      return res.status(401).json({ error: 'Hesabı silmek için şifrenizi doğru girmeniz gerekiyor.' });
+      return res.status(401).json({ error: 'Hesabı silmek için parolanızı doğru girmeniz gerekiyor.' });
     }
 
     const id = req.kullanici.id;
@@ -1734,7 +1841,7 @@ app.post('/api/lab/oku', girisGerekli, pdfSinirlayici, pdfGovdesi, async (req, r
       });
     }
     res.status(400).json({
-      error: 'PDF okunamadı. Dosyanın e-Nabız tahlil raporu olduğundan ve bozuk olmadığından emin olun.',
+      error: 'PDF okunamadı. Dosyanın metin içeren bir tahlil raporu olduğundan ve bozuk olmadığından emin olun.',
     });
   }
 });
@@ -2031,7 +2138,7 @@ app.use((hata, _req, res, _next) => {
   if (hata && (hata.type === 'entity.too.large' || hata.status === 413)) {
     return res.status(413).json({
       error: `Dosya çok büyük. En fazla ${PDF_SINIRI.toUpperCase()} olabilir. `
-        + 'e-Nabız tahlil raporları genelde 1 MB\'ın altındadır.',
+        + 'Tahlil raporları genelde 1 MB\'ın altındadır.',
     });
   }
   if (hata && (hata.type === 'entity.parse.failed' || hata.status === 400)) {
@@ -2043,7 +2150,7 @@ app.use((hata, _req, res, _next) => {
 app.listen(PORT, () => {
   console.log(`API çalışıyor: http://localhost:${PORT}`);
   // Posta yapılandırılmamışsa bunu BAŞLANGIÇTA söylemek gerekiyor. Aksi hâlde
-  // yayına alındığında "şifremi unuttum" sessizce işlemez: kullanıcı ekranda
+  // yayına alındığında "parolamı unuttum" sessizce işlemez: kullanıcı ekranda
   // "bağlantı gönderildi" görür ama postası hiç gelmez.
   if (eposta.yapilandirildiMi()) {
     const a = eposta.ayarlar();
@@ -2063,7 +2170,7 @@ app.listen(PORT, () => {
   } else {
     console.warn(
       `[POSTA] YAPILANDIRILMAMIŞ: ${eposta.eksikNe()}\n`
-      + '[POSTA] Doğrulama ve şifre sıfırlama bağlantıları GÖNDERİLMEYECEK;\n'
+      + '[POSTA] Doğrulama ve parola sıfırlama bağlantıları GÖNDERİLMEYECEK;\n'
       + '[POSTA] bu günlüğe yazılacak. Kayıt olan kimse hesabını doğrulayamaz.\n'
       + '[POSTA] Adımlar: backend/.env.example dosyasının Brevo bölümü.',
     );

@@ -99,7 +99,7 @@ Korunması Kanunu'nun 10'uncu maddesi kapsamında hazırlanmıştır.
   raporundaki test sonuçları.
 - Diğer: cinsiyet, diyet tercihi, günlük kalori ve su kayıtlarınız.
 
-Şifreniz saklanmaz; yalnızca geri döndürülemeyen özeti tutulur.
+Parolanız saklanmaz; yalnızca geri döndürülemeyen özeti tutulur.
 
 ## 2. İşleme Amaçları
 

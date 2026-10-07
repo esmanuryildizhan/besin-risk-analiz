@@ -8,7 +8,7 @@ import {
   Loader2, Mail,
 } from 'lucide-react';
 import { api } from '../api';
-import { HataKutusu, SecimKutusu } from '../components/ortak';
+import { HataKutusu, ParolaKurallari, SecimKutusu } from '../components/ortak';
 import { OnayBloku, useKvkk } from '../kvkk/KvkkBilesenleri';
 
 export const RegisterScreen = ({ onBack, meta }) => {
@@ -98,7 +98,14 @@ export const RegisterScreen = ({ onBack, meta }) => {
               <input placeholder="Soyad" value={form.surname} onChange={degistir('surname')} className="p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
             </div>
             <input type="email" placeholder="E-posta Adresi" value={form.email} onChange={degistir('email')} className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
-            <input type="password" placeholder="Şifre (en az 8 karakter)" value={form.password} onChange={degistir('password')} className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
+            <div>
+              <input
+                type="password" placeholder="Parola" autoComplete="new-password"
+                value={form.password} onChange={degistir('password')}
+                className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500"
+              />
+              <ParolaKurallari parola={form.password} />
+            </div>
             <select value={form.gender} onChange={degistir('gender')} className="w-full p-4 bg-gray-50 border rounded-xl text-gray-600 outline-none focus:border-green-500">
               <option value="">Cinsiyet seçiniz</option>
               <option value="Kadın">Kadın</option>

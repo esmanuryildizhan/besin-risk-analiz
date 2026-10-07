@@ -4,12 +4,122 @@
 
 import React, { useState } from 'react';
 import {
-  Activity, CheckCircle, Info, Loader2, Monitor, Moon, Palette, Save, Shield, Sun, User,
+  Activity, CheckCircle, Info, KeyRound, Loader2, Monitor, Moon, Palette, Save, Shield, Sun, User,
 } from 'lucide-react';
-import { api } from '../api';
+import { api, tokenKaydet } from '../api';
 import { HataKutusu, SecimKutusu } from '../components/ortak';
 import { HesapSilme, VeriIndirme } from '../kvkk/KvkkBilesenleri';
 import { kayitliTema, temayiSec } from '../tema';
+import { ParolaKurallari } from '../components/ortak';
+import { tumKurallarTamamMi } from '../parolaKurali';
+
+/**
+ * Parola değiştirme.
+ *
+ * MEVCUT PAROLA SORULUYOR: kullanıcı bilgisayarını kilitlemeden kalktıysa ya
+ * da biri oturum tokenını ele geçirdiyse, parola değiştirme hesabı KALICI
+ * devralmaya yarar. Mevcut parola şartı bunu engelliyor. Sunucu da ayrıca
+ * doğruluyor; buradaki alan yalnızca onu göndermek için.
+ *
+ * 2FA AÇIKSA: sunucu { ikinciAsama: true } dönüyor, kod alanı açılıyor.
+ * Aynı desen giriş ve parola sıfırlamada da kullanılıyor.
+ */
+const ParolaDegistirme = () => {
+  const [mevcut, setMevcut] = useState('');
+  const [yeni, setYeni] = useState('');
+  const [tekrar, setTekrar] = useState('');
+  const [kod, setKod] = useState('');
+  const [kodGerekli, setKodGerekli] = useState(false);
+  const [bekliyor, setBekliyor] = useState(false);
+  const [hata, setHata] = useState('');
+  const [tamam, setTamam] = useState('');
+
+  const gonder = async () => {
+    setHata(''); setTamam('');
+    if (yeni !== tekrar) { setHata('İki parola birbiriyle aynı değil.'); return; }
+    if (!tumKurallarTamamMi(yeni)) { setHata('Yeni parola aşağıdaki kuralların tümünü karşılamalı.'); return; }
+    if (yeni === mevcut) { setHata('Yeni parola eskisiyle aynı olamaz.'); return; }
+    setBekliyor(true);
+    try {
+      const c = await api.parolaDegistir(mevcut, yeni, kodGerekli ? kod : undefined);
+      if (c.ikinciAsama) { setKodGerekli(true); setBekliyor(false); return; }
+      // Sunucu diğer oturumları kapattı ve bize yeni bir token verdi;
+      // saklanmazsa kullanıcı kendi oturumundan da düşerdi.
+      if (c.token) tokenKaydet(c.token);
+      setTamam(c.mesaj || 'Parolanız güncellendi.');
+      setMevcut(''); setYeni(''); setTekrar(''); setKod(''); setKodGerekli(false);
+    } catch (h) {
+      setHata(h.message);
+    } finally {
+      setBekliyor(false);
+    }
+  };
+
+  const girdi = 'w-full p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-green-500 text-gray-700';
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-200 p-8">
+      <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+        <div className="bg-amber-100 p-3 rounded-2xl text-amber-800"><KeyRound size={22} /></div> Parola Değiştir
+      </h2>
+      <div className="space-y-4">
+        <div>
+          <label htmlFor="parola-mevcut" className="text-xs font-bold text-gray-500 mb-1 block uppercase">Mevcut parola</label>
+          <input
+            id="parola-mevcut" type="password" autoComplete="current-password"
+            value={mevcut} onChange={(e) => setMevcut(e.target.value)} className={girdi}
+          />
+        </div>
+        <div>
+          <label htmlFor="parola-yeni" className="text-xs font-bold text-gray-500 mb-1 block uppercase">Yeni parola</label>
+          <input
+            id="parola-yeni" type="password" autoComplete="new-password"
+            value={yeni} onChange={(e) => setYeni(e.target.value)} className={girdi}
+          />
+          <ParolaKurallari parola={yeni} />
+        </div>
+        <div>
+          <label htmlFor="parola-tekrar" className="text-xs font-bold text-gray-500 mb-1 block uppercase">Yeni parola (tekrar)</label>
+          <input
+            id="parola-tekrar" type="password" autoComplete="new-password"
+            value={tekrar} onChange={(e) => setTekrar(e.target.value)} className={girdi}
+          />
+        </div>
+        {kodGerekli && (
+          <div>
+            <label htmlFor="parola-2fa" className="text-xs font-bold text-gray-500 mb-1 block uppercase">
+              Doğrulama uygulamasındaki kod
+            </label>
+            <input
+              id="parola-2fa" inputMode="numeric" value={kod}
+              onChange={(e) => setKod(e.target.value.replace(/\s/g, ''))}
+              className={`${girdi} text-center text-2xl tracking-[0.3em] font-bold`}
+            />
+          </div>
+        )}
+
+        <HataKutusu mesaj={hata} />
+        {tamam && (
+          <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl p-4" role="status">
+            {tamam}
+          </p>
+        )}
+
+        <button
+          onClick={gonder}
+          disabled={bekliyor || !mevcut || !yeni || !tekrar}
+          className="bg-green-700 hover:bg-green-800 text-white font-bold px-6 py-3 rounded-xl transition disabled:opacity-40 flex items-center gap-2"
+        >
+          {bekliyor ? <Loader2 className="animate-spin" size={18} /> : <KeyRound size={18} />}
+          Parolayı Değiştir
+        </button>
+        <p className="text-xs text-gray-500">
+          Parolanızı değiştirince diğer cihazlarda açık kalan oturumlar kapatılır.
+        </p>
+      </div>
+    </div>
+  );
+};
 
 /**
  * Tema seçimi.
@@ -207,8 +317,8 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
           </h3>
           <p className="text-sm text-gray-600 leading-relaxed max-w-xl">
             {user.totpEnabled
-              ? `Girişte şifrenizin yanı sıra telefonunuzdaki doğrulayıcı uygulamanın ürettiği kod isteniyor. Kalan yedek kod: ${user.yedekKodSayisi}.`
-              : 'Açtığınızda, şifrenizi bilen biri bile telefonunuza erişemeden hesabınıza giremez. Sağlık verisi tutulduğu için açılması önerilir.'}
+              ? `Girişte parolanızın yanı sıra telefonunuzdaki doğrulayıcı uygulamanın ürettiği kod isteniyor. Kalan yedek kod: ${user.yedekKodSayisi}.`
+              : 'Açtığınızda, parolanızı bilen biri bile telefonunuza erişemeden hesabınıza giremez. Sağlık verisi tutulduğu için açılması önerilir.'}
           </p>
         </div>
       </div>
@@ -228,9 +338,9 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
         </button>
       ) : (
         <div className="mt-4 space-y-3 max-w-md">
-          <p className="text-sm font-semibold text-gray-700">Kapatmak için şifrenizi girin:</p>
+          <p className="text-sm font-semibold text-gray-700">Kapatmak için parolanızı girin:</p>
           <input type="password" value={sifre} onChange={(e) => setSifre(e.target.value)}
-            placeholder="Şifreniz" autoComplete="current-password"
+            placeholder="Parolanız" autoComplete="current-password"
             className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
           <div className="flex gap-3">
             <button onClick={kapat} disabled={bekliyor || !sifre}
@@ -403,6 +513,8 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
       )}
 
       <GorunumAyari />
+
+      <ParolaDegistirme />
 
       <IkiAsamaliDogrulama user={user} onGuncelle={onGuncelle} />
 

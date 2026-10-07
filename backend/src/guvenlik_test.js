@@ -21,6 +21,7 @@ const ayristirici = require('./tahlil_ayristir');
 const saklama = require('./saklama');
 const eposta = require('./eposta');
 const kvkk = require('./kvkk_metinleri');
+const parola = require('./parola_kurali');
 
 let gecen = 0;
 const kalan = [];
@@ -275,7 +276,7 @@ test('G28 Çözülmüş kalem arayüzün beklediği şekle dönüyor', () => {
 });
 
 
-// --- Şifre sıfırlama bileti ve oturum damgası (G29-G35) --------------------
+// --- Parola sıfırlama bileti ve oturum damgası (G29-G35) --------------------
 
 test('G29 Bilet özeti determinist (aranabilmesi için)', () => {
   const b = 'a3f9c1';
@@ -300,14 +301,14 @@ test('G32 Damga yoksa her bilet geçerli', () => {
 });
 
 test('G33 Damgadan ÖNCE verilmiş bilet reddediliyor', () => {
-  // Şifre sıfırlandı; saldırganın bir saat önce aldığı bilet çalışmamalı.
+  // Parola sıfırlandı; saldırganın bir saat önce aldığı bilet çalışmamalı.
   const damga = new Date('2026-10-07T12:00:00Z');
   const birSaatOnce = Math.floor(new Date('2026-10-07T11:00:00Z').getTime() / 1000);
   esit(oturum.biletDamgadanSonraMi(birSaatOnce, damga), false, 'eski bilet kabul edildi');
 });
 
 test('G34 Damgadan SONRA verilmiş bilet kabul ediliyor', () => {
-  // Kullanıcı şifresini sıfırlayıp yeniden giriş yaptı; yeni bileti çalışmalı.
+  // Kullanıcı parolasını sıfırlayıp yeniden giriş yaptı; yeni bileti çalışmalı.
   const damga = new Date('2026-10-07T12:00:00Z');
   const birSaatSonra = Math.floor(new Date('2026-10-07T13:00:00Z').getTime() / 1000);
   esit(oturum.biletDamgadanSonraMi(birSaatSonra, damga), true, 'yeni bilet reddedildi');
@@ -680,7 +681,7 @@ test('G57 Hiç giriş yapmamışta kayıt tarihi esas alınıyor', () => {
 // --- Posta yapılandırma teşhisi (G58-G63) ----------------------------------
 //
 // Niye güvenlik testi: posta sessizce durduğunda kimse hesabını DOĞRULAYAMIYOR
-// ve kimse şifresini SIFIRLAYAMIYOR. Kullanıcı ekranda "bağlantı gönderildi"
+// ve kimse parolasını SIFIRLAYAMIYOR. Kullanıcı ekranda "bağlantı gönderildi"
 // görüyor, posta hiç gelmiyor. Yani yanlış teşhis doğrudan erişim kaybı.
 //
 // Bu testler yoluCoz()'u saf olarak çağırıyor; process.env'e dokunmuyorlar.
@@ -799,7 +800,7 @@ const EPOSTA_KALIBI = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 // yanlış — orada değer harfi harfine alınıyor ve tırnak değerin parçası
 // oluyor. Sonuç, Brevo'da `401 Key not found`: "anahtar yanlış" gibi görünen,
 // aslında "anahtarın etrafında tırnak var" olan bir hata. Posta durunca kimse
-// hesabını doğrulayamıyor ve kimse şifresini sıfırlayamıyor.
+// hesabını doğrulayamıyor ve kimse parolasını sıfırlayamıyor.
 
 test('G69 Çevresindeki tırnaklar soyuluyor (Render tuzağı)', () => {
   esit(eposta.ortamiTemizle('"xkeysib-abc"').deger, 'xkeysib-abc', 'çift tırnak soyulmadı');
@@ -870,6 +871,146 @@ test('G67 Rıza sürümü, metinler değiştiğinde yeniden onay tetikliyor', ()
     `sürüm numarası beklenen biçimde değil: ${JSON.stringify(kvkk.SURUM)}`,
   );
   dogru(Boolean(kvkk.SURUM_TARIHI), 'sürüm tarihi boş');
+});
+
+// --- Parola kuralı (G73-G79) ------------------------------------------------
+//
+// Niye güvenlik testi: parola, hesaba açılan tek kapı. Kural gevşerse
+// sağlık verisi tahmin edilebilir bir parolanın arkasında kalır.
+
+const GECERLI = 'Tr#9kLmPq2';   // 10 karakter, harf+rakam+sembol, çeşitli
+
+test('G73 Geçerli parola kabul ediliyor', () => {
+  const s = parola.parolaDenetle(GECERLI);
+  dogru(s.gecerli, `geçerli parola reddedildi: ${s.kodlar.join(',')}`);
+});
+
+test('G74 Harf, rakam ve sembol AYRI AYRI zorunlu', () => {
+  const durumlar = [
+    ['1234567!89', 'harf'],      // harf yok
+    ['AbcdefGh!j', 'rakam'],     // rakam yok
+    ['Abcdefg123', 'sembol'],    // sembol yok
+  ];
+  const hatalar = [];
+  durumlar.forEach(([p, beklenen]) => {
+    const s = parola.parolaDenetle(p);
+    if (s.gecerli) hatalar.push(`${p} kabul edildi (${beklenen} eksikken)`);
+    else if (!s.kodlar.includes(beklenen)) {
+      hatalar.push(`${p} -> beklenen "${beklenen}", gelen "${s.kodlar.join(',')}"`);
+    }
+  });
+  esit(hatalar.length, 0, hatalar.join(' | '));
+});
+
+test('G75 Uzunluk alt sınırı uygulanıyor', () => {
+  // Kuralların hepsini karşılayan ama kısa olan parola.
+  const s = parola.parolaDenetle('Ab1!cdef');   // 8 karakter
+  dogru(!s.gecerli, '8 karakterlik parola kabul edildi');
+  dogru(s.kodlar.includes('uzunluk'), `uzunluk şikâyeti yok: ${s.kodlar.join(',')}`);
+  dogru(parola.EN_AZ >= 10, `alt sınır düşürülmüş: ${parola.EN_AZ}`);
+});
+
+test('G76 Tekrara dayalı parola eleniyor', () => {
+  // ÖLÇÜLDÜ: ilk yazımda bu ikisi GEÇİYORDU. Uzunluk, harf, rakam ve sembol
+  // şartlarının hepsini karşılıyorlar ama gerçek entropileri yok. Ölçü
+  // "tamamı aynı karakter mi" idi; "kaç farklı karakter var" olmalıydı.
+  ['aaaaaaaaaa1!', 'şşşşşşşşşş1!', 'ababababab1!'].forEach((p) => {
+    const s = parola.parolaDenetle(p);
+    dogru(!s.gecerli, `tekrara dayalı parola kabul edildi: ${p}`);
+  });
+});
+
+test('G77 Ardışık diziler eleniyor', () => {
+  ['Qwerty123456!', 'abcdef123!X', 'Zyxwvu123!a'].forEach((p) => {
+    const s = parola.parolaDenetle(p);
+    dogru(!s.gecerli, `ardışık dizi kabul edildi: ${p}`);
+    dogru(s.kodlar.includes('ardisik'), `${p} -> ardışık sayılmadı: ${s.kodlar.join(',')}`);
+  });
+});
+
+test('G78 Kişisel bilgi içeren parola eleniyor', () => {
+  const kisi = { eposta: 'esmanur@ornek.com', ad: 'Esma', soyad: 'Yıldızhan' };
+  // Hedefli tahmin saldırısı sözlük değil, kişinin kendi bilgisiyle çalışıyor.
+  ['esmanur2024!', 'Yıldızhan12!', 'ESMANUR#99x'].forEach((p) => {
+    const s = parola.parolaDenetle(p, kisi);
+    dogru(!s.gecerli, `kişisel bilgi içeren parola kabul edildi: ${p}`);
+  });
+  // Yanlış pozitif olmamalı: alakasız parola aynı kişi için geçmeli.
+  dogru(parola.parolaDenetle(GECERLI, kisi).gecerli, 'alakasız parola yanlışlıkla reddedildi');
+});
+
+test('G79 Sızıntı denetimi k-anonimlik protokolünü doğru uyguluyor', async () => {
+  // Ağ çağrısı sahte: sınanan şey protokol, servisin kendisi değil.
+  // "test" parolasinin SHA-1'i: A94A8FE5CCB19BA61C4C0873D391E987982FBBD3
+  const gercekFetch = global.fetch;
+  let istenenAdres = null;
+  global.fetch = async (adres) => {
+    istenenAdres = adres;
+    return {
+      ok: true,
+      text: async () => 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF:3\r\n'
+        + 'FE5CCB19BA61C4C0873D391E987982FBBD3:12345\r\n',
+    };
+  };
+  try {
+    const { sizintiKontrol } = require('./parola_sizinti');
+    const s = await sizintiKontrol('test');
+    // 1) Parolanın KENDİSİ ya da tam özeti gönderilmemeli
+    dogru(!istenenAdres.includes('test'), 'parola adrese konmuş');
+    dogru(istenenAdres.endsWith('/A94A8'), `yalnızca 5 haneli ön ek gönderilmeli: ${istenenAdres}`);
+    dogru(!istenenAdres.includes('FE5CCB19'), 'özetin kuyruğu da gönderilmiş');
+    // 2) Eşleşme bulunmalı
+    dogru(s.bakildi && s.sizmis, 'sızmış parola yakalanmadı');
+    esit(s.kezSayisi, 12345, 'kez sayısı yanlış okundu');
+  } finally {
+    global.fetch = gercekFetch;
+  }
+});
+
+test('G80 Sızıntı servisi erişilemezse kayıt kilitlenmiyor', async () => {
+  const gercekFetch = global.fetch;
+  global.fetch = async () => { throw new Error('ag yok'); };
+  try {
+    const { sizintiKontrol } = require('./parola_sizinti');
+    const s = await sizintiKontrol('Tr#9kLmPq2');
+    esit(s.bakildi, false, 'servise ulaşılamadığı hâlde karar verildi');
+    esit(s.sizmis, false, 'ulaşılamazken parola sızmış sayıldı (kayıt kilitlenirdi)');
+  } finally {
+    global.fetch = gercekFetch;
+  }
+});
+
+test('G81 Arayüzdeki parola kuralı kopyası sunucuyla AYNI', () => {
+  // Arayüz, kullanıcıya anlık geri bildirim verebilmek için kuralın bir
+  // kopyasını taşıyor (src/parolaKurali.js). İki taraf ayrışırsa kullanıcı
+  // "kurallar tamam" görüp gönderimde hata alır — ya da tersi, daha kötüsü,
+  // arayüz daha gevşek görünür. Bu test ayrışmayı yakalıyor.
+  const fs = require('fs');
+  const path = require('path');
+  const yol = path.join(__dirname, '..', '..', 'src', 'parolaKurali.js');
+  dogru(fs.existsSync(yol), `arayüz kuralı bulunamadı: ${yol}`);
+  const metin = fs.readFileSync(yol, 'utf8');
+
+  const sayiAl = (ad) => {
+    const m = metin.match(new RegExp(`export const ${ad} = (\\d+)`));
+    return m ? Number(m[1]) : null;
+  };
+  esit(sayiAl('EN_AZ'), parola.EN_AZ, 'asgari uzunluk iki tarafta farklı');
+  esit(sayiAl('EN_AZ_FARKLI'), parola.EN_AZ_FARKLI, 'asgari çeşitlilik iki tarafta farklı');
+
+  // Arayüzün gösterdiği madde kodları sunucunun ürettiği kodların alt kümesi olmalı
+  const arayuzKodlari = [...metin.matchAll(/kod: '([a-z]+)'/g)].map((m) => m[1]);
+  // Tek bir denemeyle TÜM kod adları çıkmıyor (boş parola çeşitlilik
+  // denetimini tetiklemiyor). Birkaç denemenin birleşimi alınıyor.
+  const sunucuKodlari = [...new Set([
+    ...parola.parolaDenetle('').kodlar,
+    ...parola.parolaDenetle('aaa').kodlar,
+    ...parola.parolaDenetle('abcdefghij').kodlar,
+    ...parola.parolaDenetle('x'.repeat(250)).kodlar,
+    ...parola.parolaDenetle('esma1234!xyz', { ad: 'Esma' }).kodlar,
+  ])];
+  const fazlalik = arayuzKodlari.filter((k) => !sunucuKodlari.includes(k));
+  esit(fazlalik.length, 0, `arayüzde sunucuda olmayan kural var: ${fazlalik.join(',')}`);
 });
 
 Promise.all(sozler).then(() => {

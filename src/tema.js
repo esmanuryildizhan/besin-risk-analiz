@@ -4,7 +4,7 @@
 //
 // NİYE SUNUCUDA DEĞİL TARAYICIDA SAKLANIYOR: tema bir görünüm tercihi,
 // kişisel veri değil. Veritabanına yazmak hem şema göçü hem de her açılışta
-// fazladan istek demekti; üstelik kullanıcı giriş yapmadan (kayıt, şifre
+// fazladan istek demekti; üstelik kullanıcı giriş yapmadan (kayıt, parola
 // sıfırlama ekranlarında) da temanın doğru olması gerekiyor. localStorage
 // giriş gerektirmiyor. Bedeli: tercih cihaz başına, cihazlar arası taşınmıyor.
 //

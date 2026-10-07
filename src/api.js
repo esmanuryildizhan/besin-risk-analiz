@@ -90,7 +90,7 @@ export const api = {
       body: JSON.stringify({ aydinlatmaOkundu: true, acikRiza: true }),
     }),
 
-  // Geri alınamaz. Şifre doğrulaması sunucuda yapılıyor.
+  // Geri alınamaz. Parola doğrulaması sunucuda yapılıyor.
   hesabiSil: (password) =>
     istek('/api/me', { method: 'DELETE', body: JSON.stringify({ password }) }),
 
@@ -115,6 +115,12 @@ export const api = {
   // --- ŞİFRE SIFIRLAMA ---
   // Sunucu, adres kayıtlı olsun olmasın AYNI yanıtı veriyor; arayüz de bu
   // yüzden "posta gitti" demiyor, "kayıtlıysa gitti" diyor.
+  parolaDegistir: (mevcutParola, yeniParola, kod) =>
+    istek('/api/parola/degistir', {
+      method: 'POST',
+      body: JSON.stringify({ mevcutParola, yeniParola, kod }),
+    }),
+
   sifremiUnuttum: (email) =>
     istek('/api/sifre/unuttum', { method: 'POST', body: JSON.stringify({ email }) }),
 
