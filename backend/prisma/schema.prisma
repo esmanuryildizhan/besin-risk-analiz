@@ -8,7 +8,23 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+
+  // url: UYGULAMANIN sorguları buradan geçiyor. Yayında HAVUZLANMIŞ
+  // (pooled) bağlantı kullanılıyor — sunucu ortamlarında eşzamanlı bağlantı
+  // sayısı sınırlı ve havuzlayıcı bunu yönetiyor.
+  url = env("DATABASE_URL")
+
+  // directUrl: GÖÇLER buradan geçiyor, havuzlayıcıyı ATLAYARAK.
+  //
+  // Niye şart: Neon'un havuzlayıcısı (PgBouncer, işlem kipinde) göçlerin
+  // ihtiyaç duyduğu oturum düzeyindeki işlemleri desteklemiyor — danışma
+  // kilitleri ve hazırlanmış ifadeler gibi. Havuzlanmış bağlantı üzerinden
+  // `prisma migrate deploy` çalıştırmak, sebebi anlaşılmayan hatalarla
+  // başarısız oluyor.
+  //
+  // YEREL GELİŞTİRMEDE havuzlayıcı yok; .env dosyasında DIRECT_URL'i
+  // DATABASE_URL ile aynı yazmak yeterli.
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
