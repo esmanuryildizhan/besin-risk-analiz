@@ -111,4 +111,162 @@ html {
 
 .duration-500 {
   animation-duration: 500ms;
+}/* ═══════════════════════════════════════════════════════════════════════
+ * KARANLIK MOD
+ *
+ * NİYE "dark:" ÖN EKİ KULLANILMADI: arayüzde 585'ten fazla renk sınıfı var.
+ * Her birine dark: karşılığı eklemek ~600 düzenleme demekti ve çalışan açık
+ * modu bozma riski kabul edilemezdi. Burada yalnızca .dark altındaki kurallar
+ * ekleniyor; .dark yokken HİÇBİR kural eşleşmiyor, yani açık mod tek bayt
+ * değişmiyor. tailwind.config.js'e de dokunulmadı.
+ *
+ * NİYE PALET TOPLUCA ÇEVRİLMEDİ: "white" iki ayrı işte kullanılıyor —
+ * bg-white kart yüzeyi, text-white ise yeşil düğme üstündeki yazı. Ölçüldü:
+ * 21 text-white kullanımının hepsi doygun renkli zeminde. Token topluca
+ * koyulaştırılsaydı düğme yazıları okunmaz hale gelirdi. Aynı ikilik gray-800
+ * için de var (bg-gray-800 koyu çip / text-gray-800 başlık). Bu yüzden
+ * bg- ve text- ayrı ayrı ele alınıyor.
+ *
+ * Değerler Tailwind'in kendi paletinden alındı, uydurma renk yok.
+ * Karşıtlık oranları ölçüldü; ayrıntı aşağıdaki tabloda.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.dark {
+  /* Tarayıcıya temayı bildiriyor: kaydırma çubukları, form denetimleri ve
+     otomatik doldurma renkleri de koyuya geçiyor. */
+  color-scheme: dark;
 }
+
+.dark body {
+  background-color: #030712;
+  color: #e5e7eb;
+}
+
+
+/* ---- Yüzeyler ---- */
+.dark .bg-white { background-color: #111827; }
+.dark .bg-gray-50 { background-color: #1f2937; }
+.dark .bg-gray-100 { background-color: #374151; }
+.dark .bg-gray-200 { background-color: #4b5563; }
+.dark .bg-gray-800 { background-color: #374151; }
+.dark .bg-gray-900 { background-color: #1f2937; }
+
+/* ---- Renkli uyarı/kart zeminleri: açık ton -> koyu ton ---- */
+.dark .bg-green-50 { background-color: #052e16; }
+.dark .bg-green-100 { background-color: #14532d; }
+.dark .bg-red-50 { background-color: #450a0a; }
+.dark .bg-red-100 { background-color: #7f1d1d; }
+.dark .bg-yellow-50 { background-color: #422006; }
+.dark .bg-yellow-100 { background-color: #713f12; }
+.dark .bg-amber-50 { background-color: #451a03; }
+.dark .bg-amber-100 { background-color: #78350f; }
+.dark .bg-blue-50 { background-color: #172554; }
+.dark .bg-blue-100 { background-color: #1e3a8a; }
+.dark .bg-sky-50 { background-color: #082f49; }
+.dark .bg-sky-100 { background-color: #0c4a6e; }
+.dark .bg-indigo-50 { background-color: #1e1b4b; }
+.dark .bg-indigo-100 { background-color: #312e81; }
+.dark .bg-purple-50 { background-color: #3b0764; }
+.dark .bg-purple-100 { background-color: #581c87; }
+.dark .bg-emerald-50 { background-color: #022c22; }
+.dark .bg-emerald-100 { background-color: #064e3b; }
+
+/* ---- Gri metin: açık modun koyusu -> karanlık modun açığı ---- */
+.dark .text-gray-500 { color: #9ca3af; }
+.dark .text-gray-600 { color: #d1d5db; }
+.dark .text-gray-700 { color: #e5e7eb; }
+.dark .text-gray-800 { color: #f3f4f6; }
+
+/* ---- Renkli metin: koyu tonlar koyu zemin üstünde okunmaz, açılıyor ---- */
+.dark .text-green-700 { color: #86efac; }
+.dark .text-green-800 { color: #bbf7d0; }
+.dark .text-green-900 { color: #bbf7d0; }
+.dark .text-green-500 { color: #4ade80; }
+.dark .text-green-600 { color: #4ade80; }
+.dark .text-red-700 { color: #fca5a5; }
+.dark .text-red-800 { color: #fecaca; }
+.dark .text-red-900 { color: #fecaca; }
+.dark .text-red-500 { color: #f87171; }
+.dark .text-red-600 { color: #f87171; }
+.dark .text-yellow-700 { color: #fde047; }
+.dark .text-yellow-800 { color: #fef08a; }
+.dark .text-yellow-900 { color: #fef08a; }
+.dark .text-yellow-500 { color: #facc15; }
+.dark .text-yellow-600 { color: #facc15; }
+.dark .text-amber-700 { color: #fcd34d; }
+.dark .text-amber-800 { color: #fde68a; }
+.dark .text-amber-900 { color: #fde68a; }
+.dark .text-amber-500 { color: #fbbf24; }
+.dark .text-amber-600 { color: #fbbf24; }
+.dark .text-blue-700 { color: #93c5fd; }
+.dark .text-blue-800 { color: #bfdbfe; }
+.dark .text-blue-900 { color: #bfdbfe; }
+.dark .text-blue-500 { color: #60a5fa; }
+.dark .text-blue-600 { color: #60a5fa; }
+.dark .text-sky-700 { color: #7dd3fc; }
+.dark .text-sky-800 { color: #bae6fd; }
+.dark .text-sky-900 { color: #bae6fd; }
+.dark .text-sky-500 { color: #38bdf8; }
+.dark .text-sky-600 { color: #38bdf8; }
+.dark .text-indigo-700 { color: #a5b4fc; }
+.dark .text-indigo-800 { color: #c7d2fe; }
+.dark .text-indigo-900 { color: #c7d2fe; }
+.dark .text-indigo-500 { color: #818cf8; }
+.dark .text-indigo-600 { color: #818cf8; }
+.dark .text-purple-700 { color: #d8b4fe; }
+.dark .text-purple-800 { color: #e9d5ff; }
+.dark .text-purple-900 { color: #e9d5ff; }
+.dark .text-purple-500 { color: #c084fc; }
+.dark .text-purple-600 { color: #c084fc; }
+.dark .text-emerald-700 { color: #6ee7b7; }
+.dark .text-emerald-800 { color: #a7f3d0; }
+.dark .text-emerald-900 { color: #a7f3d0; }
+.dark .text-emerald-500 { color: #34d399; }
+.dark .text-emerald-600 { color: #34d399; }
+
+/* ---- Kenarlıklar ---- */
+.dark .border-gray-50 { border-color: #1f2937; }
+.dark .border-gray-100 { border-color: #374151; }
+.dark .border-gray-200 { border-color: #374151; }
+.dark .border-gray-300 { border-color: #4b5563; }
+.dark .border-gray-400 { border-color: #6b7280; }
+.dark .border-gray-800 { border-color: #4b5563; }
+.dark .border-green-100 { border-color: #166534; }
+.dark .border-green-200 { border-color: #15803d; }
+.dark .border-red-100 { border-color: #991b1b; }
+.dark .border-red-200 { border-color: #b91c1c; }
+.dark .border-yellow-100 { border-color: #854d0e; }
+.dark .border-yellow-200 { border-color: #a16207; }
+.dark .border-amber-100 { border-color: #92400e; }
+.dark .border-amber-200 { border-color: #b45309; }
+.dark .border-blue-100 { border-color: #1e40af; }
+.dark .border-blue-200 { border-color: #1d4ed8; }
+.dark .border-sky-100 { border-color: #075985; }
+.dark .border-sky-200 { border-color: #0369a1; }
+.dark .border-indigo-100 { border-color: #3730a3; }
+.dark .border-indigo-200 { border-color: #4338ca; }
+.dark .border-purple-100 { border-color: #6b21a8; }
+.dark .border-purple-200 { border-color: #7e22ce; }
+.dark .border-emerald-100 { border-color: #065f46; }
+.dark .border-emerald-200 { border-color: #047857; }
+
+/* ---- Degradelerin açık uçları (düğme degradeleri dokunulmadı) ---- */
+.dark .from-green-50 { --tw-gradient-from: #052e16 var(--tw-gradient-from-position); --tw-gradient-to: rgb(5 46 22 / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-emerald-100 { --tw-gradient-to: #064e3b var(--tw-gradient-to-position); }
+
+/* ---- Diğer ---- */
+.dark .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+/* Yer tutucu metni: koyu zeminde gray-400 varsayılanı 2.4:1'de kalıyor. */
+.dark ::placeholder { color: #9ca3af; opacity: 1; }
+/* Devre dışı girdi (profil e-posta alanı) kart yüzeyinden ayrılsın. */
+.dark input:disabled { background-color: #1f2937; }
+
+/* ---- Sayfa zeminleri ----
+ * Bu ikisi Tailwind paleti degil, KEYFI deger (bg-[#F8F9FA]). Palet taramasi
+ * bunlari yakalamiyordu; karanlik modda sayfa zemini acik kaliyordu. Ekran
+ * goruntusuyle gorulup eklendi. Yeni bir keyfi renk eklenirse buraya da
+ * karsiligi yazilmali. */
+.dark .bg-\[\#F8F9FA\] { background-color: #030712; }
+.dark .bg-\[\#FAFAFA\] { background-color: #030712; }

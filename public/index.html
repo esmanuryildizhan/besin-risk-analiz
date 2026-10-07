@@ -19,6 +19,20 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>Besin Risk Analiz</title>
+    <script>
+      /* Tema, React yuklenmeden ONCE uygulanir. Bu betik kaldirilirsa karanlik
+         mod kullanicisi her acilista bir an beyaz ekran gorur (FOUC). Mantik
+         src/tema.js ile ayni; orada degisiklik yapilirsa burasi da guncellenmeli. */
+      (function () {
+        try {
+          var t = localStorage.getItem('tema');
+          var karanlik = t === 'karanlik'
+            || ((t === 'sistem' || t === null)
+                && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (karanlik) document.documentElement.classList.add('dark');
+        } catch (e) { /* depolama kapali: acik mod ile devam */ }
+      })();
+    </script>
   </head>
   <body>
     <noscript>Bu uygulamayı çalıştırmak için JavaScript'i etkinleştirmelisiniz.</noscript>

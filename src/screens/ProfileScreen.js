@@ -4,11 +4,66 @@
 
 import React, { useState } from 'react';
 import {
-  Activity, CheckCircle, Info, Loader2, Save, Shield, User,
+  Activity, CheckCircle, Info, Loader2, Monitor, Moon, Palette, Save, Shield, Sun, User,
 } from 'lucide-react';
 import { api } from '../api';
 import { HataKutusu, SecimKutusu } from '../components/ortak';
 import { HesapSilme, VeriIndirme } from '../kvkk/KvkkBilesenleri';
+import { kayitliTema, temayiSec } from '../tema';
+
+/**
+ * Tema seçimi.
+ *
+ * NİYE RADYO DÜĞMESİ, NİYE <button> DEĞİL: üç seçenek birbirini dışlıyor ve
+ * tam olarak biri seçili. Radyo grubu bunu tarayıcıya ve ekran okuyucuya
+ * kendiliğinden anlatıyor — "3 seçenekten 2.si, seçili" diye duyuruluyor ve
+ * ok tuşlarıyla geziliyor. Üç ayrı <button> ile aynı davranışı elde etmek
+ * için role, aria-checked ve klavye işleyicisini elle yazmak gerekirdi.
+ * Girdiler sr-only ile gizli; görünen kısım <label>, tıklama zaten ona bağlı.
+ */
+const GorunumAyari = () => {
+  const [tema, setTema] = useState(kayitliTema());
+  const secenekler = [
+    { kod: 'sistem', ad: 'Sistem', ikon: Monitor, aciklama: 'Cihazınızın ayarını izler' },
+    { kod: 'acik', ad: 'Açık', ikon: Sun, aciklama: null },
+    { kod: 'karanlik', ad: 'Karanlık', ikon: Moon, aciklama: null },
+  ];
+  const degistir = (kod) => { setTema(kod); temayiSec(kod); };
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-200 p-8">
+      <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+        <div className="bg-purple-100 p-3 rounded-2xl text-purple-700"><Palette size={22} /></div> Görünüm
+      </h2>
+      <fieldset>
+        <legend className="text-xs font-bold text-gray-500 mb-3 block uppercase">Tema</legend>
+        <div className="grid grid-cols-3 gap-3">
+          {secenekler.map(({ kod, ad, ikon: Ikon }) => (
+            <label
+              key={kod}
+              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition
+                ${tema === kod
+                  ? 'border-green-500 bg-green-50 text-green-700 font-bold'
+                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'}`}
+            >
+              <input
+                type="radio" name="tema" value={kod} checked={tema === kod}
+                onChange={() => degistir(kod)}
+                className="sr-only"
+              />
+              <Ikon size={22} />
+              <span className="text-sm">{ad}</span>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-gray-500 mt-3">
+          Tercih bu tarayıcıda saklanıyor; başka bir cihazda tekrar seçmeniz gerekir.
+          &quot;Sistem&quot; seçiliyken cihazınızın karanlık mod ayarı değişirse uygulama da izler.
+        </p>
+      </fieldset>
+    </div>
+  );
+};
 
 /**
  * İki aşamalı doğrulama kurulumu (profil ekranı).
@@ -59,7 +114,7 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
     return (
       <div className="mt-8 bg-white border-2 border-green-200 rounded-2xl p-6">
         <h3 className="font-bold text-green-900 flex items-center gap-2 mb-2">
-          <CheckCircle size={20} className="text-green-600" /> İki aşamalı doğrulama açıldı
+          <CheckCircle size={20} className="text-green-700" /> İki aşamalı doğrulama açıldı
         </h3>
         <p className="text-sm text-gray-600 mb-4 leading-relaxed">
           Aşağıdaki yedek kodları güvenli bir yere kaydedin. Telefonunuza
@@ -78,7 +133,7 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
         </button>
         <button
           onClick={() => setAsama('kapali')}
-          className="mt-4 ml-3 px-5 py-2.5 rounded-xl font-semibold bg-green-600 text-white text-sm"
+          className="mt-4 ml-3 px-5 py-2.5 rounded-xl font-semibold bg-green-700 text-white text-sm"
         >
           Kaydettim, kapat
         </button>
@@ -91,7 +146,7 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
     return (
       <div className="mt-8 bg-white border-2 border-green-100 rounded-2xl p-6">
         <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
-          <Shield size={20} className="text-green-600" /> Doğrulayıcı uygulamayı bağlayın
+          <Shield size={20} className="text-green-700" /> Doğrulayıcı uygulamayı bağlayın
         </h3>
         <div className="flex flex-col sm:flex-row gap-6">
           <div className="shrink-0">
@@ -123,7 +178,7 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
             <HataKutusu mesaj={hata} />
             <div className="flex gap-3">
               <button onClick={dogrula} disabled={bekliyor || kod.length < 6}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-3 rounded-xl transition disabled:opacity-40 flex items-center gap-2">
+                className="bg-green-700 hover:bg-green-800 text-white font-bold px-6 py-3 rounded-xl transition disabled:opacity-40 flex items-center gap-2">
                 {bekliyor ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle size={18} />}
                 Doğrula ve aç
               </button>
@@ -144,7 +199,7 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-1">
-            <Shield size={20} className={user.totpEnabled ? 'text-green-600' : 'text-gray-500'} />
+            <Shield size={20} className={user.totpEnabled ? 'text-green-700' : 'text-gray-500'} />
             İki Aşamalı Doğrulama
             {user.totpEnabled && (
               <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">AÇIK</span>
@@ -162,7 +217,7 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
 
       {!user.totpEnabled ? (
         <button onClick={baslat} disabled={bekliyor}
-          className="mt-4 bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-3 rounded-xl transition disabled:opacity-50 flex items-center gap-2">
+          className="mt-4 bg-green-700 hover:bg-green-800 text-white font-bold px-6 py-3 rounded-xl transition disabled:opacity-50 flex items-center gap-2">
           {bekliyor ? <Loader2 className="animate-spin" size={18} /> : <Shield size={18} />}
           İki aşamalı doğrulamayı aç
         </button>
@@ -310,7 +365,7 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
 
         <div className="bg-white rounded-3xl border border-gray-200 p-8">
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
-            <div className="bg-green-100 p-3 rounded-2xl text-green-600"><Activity size={22} /></div> Sağlık & Beslenme
+            <div className="bg-green-100 p-3 rounded-2xl text-green-700"><Activity size={22} /></div> Sağlık & Beslenme
           </h2>
           <div className="space-y-8">
             <div>
@@ -346,6 +401,8 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
           </div>
         </div>
       )}
+
+      <GorunumAyari />
 
       <IkiAsamaliDogrulama user={user} onGuncelle={onGuncelle} />
 

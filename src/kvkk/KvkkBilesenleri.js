@@ -151,7 +151,7 @@ export const OnayBloku = ({ metinler, aydinlatma, setAydinlatma, riza, setRiza }
       <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
         <div className="flex items-start justify-between gap-4 mb-2">
           <h4 className="font-bold text-green-900 flex items-center gap-2">
-            <Shield size={18} className="text-green-600" /> Açık Rıza Metni
+            <Shield size={18} className="text-green-700" /> Açık Rıza Metni
           </h4>
           <button type="button" onClick={() => setAcikMetin('riza')}
             className="text-sm font-bold text-green-700 hover:text-green-800 underline shrink-0">
@@ -235,7 +235,7 @@ export const OnayEkrani = ({ user, onOnaylandi, onCikis }) => {
 
         <div className="mt-8 flex flex-wrap gap-3">
           <button onClick={gonder} disabled={bekliyor || !aydinlatma || riza !== true}
-            className="flex-1 min-w-[200px] bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-2xl transition flex items-center justify-center gap-2 disabled:opacity-40">
+            className="flex-1 min-w-[200px] bg-green-700 hover:bg-green-800 text-white font-bold py-4 rounded-2xl transition flex items-center justify-center gap-2 disabled:opacity-40">
             {bekliyor ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle size={20} />}
             Onaylıyorum, devam et
           </button>
@@ -273,7 +273,7 @@ export const VeriIndirme = () => {
   return (
     <div className="mt-8 bg-white border rounded-2xl p-6">
       <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
-        <Download size={20} className="text-green-600" /> Verilerimi indir
+        <Download size={20} className="text-green-700" /> Verilerimi indir
       </h3>
       <p className="text-sm text-gray-600 mb-4 leading-relaxed">
         Hakkınızda saklanan tüm kişisel veriyi makine tarafından okunabilir

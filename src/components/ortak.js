@@ -29,7 +29,7 @@ export const KaynakYazisi = ({ kaynak }) => {
   return (
     <>
       Kaynak: {metin}{' '}
-      <a href={eslesme[0]} target="_blank" rel="noreferrer" className="text-green-600 underline">
+      <a href={eslesme[0]} target="_blank" rel="noreferrer" className="text-green-700 underline">
         {eslesme[0]}
       </a>
     </>
@@ -72,7 +72,7 @@ export const MenuButton = ({ icon: Icon, label, isActive, onClick, isSecondary }
     onClick={onClick}
     className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-200 text-base ${
       isActive
-        ? 'bg-green-600 text-white font-bold shadow-lg shadow-green-200'
+        ? 'bg-green-700 text-white font-bold shadow-lg shadow-green-200'
         : isSecondary
         ? 'text-gray-600 hover:bg-gray-50 hover:text-green-700 font-medium'
         : 'text-gray-600 hover:bg-green-50 hover:text-green-700 font-medium'

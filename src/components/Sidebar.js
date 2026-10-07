@@ -26,7 +26,7 @@ export const Sidebar = ({ aktif, git, user, cikisYap }) => (
 
     <div className="px-4 pb-6 pt-4 border-t border-gray-100 space-y-2">
       <MenuButton icon={Settings} label="Profil Ayarları" isActive={aktif === 'profile'} onClick={() => git('profile')} isSecondary />
-      <button onClick={cikisYap} className="flex items-center gap-3 text-gray-500 hover:bg-red-50 hover:text-red-600 transition w-full px-5 py-3.5 rounded-xl text-sm font-bold">
+      <button onClick={cikisYap} className="flex items-center gap-3 text-gray-500 hover:bg-red-50 hover:text-red-700 transition w-full px-5 py-3.5 rounded-xl text-sm font-bold">
         <X size={20} /> <span>Oturumu Kapat</span>
       </button>
     </div>

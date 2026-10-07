@@ -43,7 +43,7 @@ const ARA_ETIKETLER = [
 
 const TahlilRozeti = ({ yorum, aralik }) => {
   if (!yorum) {
-    return <span className="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-lg font-bold">YORUM YOK</span>;
+    return <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-lg font-bold">YORUM YOK</span>;
   }
   let stil = 'bg-red-100 text-red-700';          // tanınmayan etiket güvenli tarafta: dikkat
   if (IYI_ETIKETLER.includes(yorum)) stil = 'bg-green-100 text-green-700';
@@ -251,7 +251,7 @@ export const LabResultsScreen = () => {
           </button>
           <button onClick={() => setKarsilastirAcik(true)} disabled={tahliller.length < 2}
             title={tahliller.length < 2 ? 'En az iki tahlil gerekiyor' : ''}
-            className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 hover:bg-green-700 transition disabled:opacity-40 disabled:shadow-none">
+            className="bg-green-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 hover:bg-green-800 transition disabled:opacity-40 disabled:shadow-none">
             <TrendingUp size={20} /> Karşılaştır
           </button>
         </div>
@@ -294,7 +294,7 @@ export const LabResultsScreen = () => {
           </div>
           <div className="flex flex-wrap gap-3 mt-8">
             <button onClick={kaydet} disabled={islemde || !secimSayisi}
-              className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl font-bold flex items-center gap-2 transition disabled:opacity-50">
+              className="bg-green-700 hover:bg-green-800 text-white px-8 py-4 rounded-xl font-bold flex items-center gap-2 transition disabled:opacity-50">
               {islemde ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />} Seçilenleri kaydet
             </button>
             <button onClick={() => { setOkunan(null); setSecimler({}); }} disabled={islemde}
@@ -309,7 +309,7 @@ export const LabResultsScreen = () => {
       {oneriler.length > 0 && (
         <div className="bg-green-50 rounded-3xl border border-green-100 p-8 mb-8">
           <h2 className="text-xl font-bold text-green-800 mb-2 flex items-center gap-3">
-            <Leaf className="text-green-600" size={22} /> Tahlilinize göre
+            <Leaf className="text-green-700" size={22} /> Tahlilinize göre
           </h2>
           <p className="text-sm text-green-700/80 mb-6">
             Laboratuvarınızın aralığının altında kalan değerler için, veri tabanındaki
@@ -320,7 +320,7 @@ export const LabResultsScreen = () => {
               <div key={o.test} className="bg-white rounded-2xl p-6 border border-green-100">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-1">
                   <h3 className="font-bold text-gray-800">{o.test}</h3>
-                  <span className="font-bold text-red-600">
+                  <span className="font-bold text-red-700">
                     {o.deger}{o.birim ? ` ${o.birim}` : ''}
                   </span>
                   <span className="text-sm text-gray-500">
@@ -377,7 +377,7 @@ export const LabResultsScreen = () => {
               <div className="flex justify-between items-center p-4 hover:bg-gray-50 rounded-2xl transition group">
                 <button onClick={() => setAcikTarih(acikTarih === t.tarih ? null : t.tarih)}
                   className="flex items-center gap-4 flex-1 min-w-0 text-left">
-                  <div className="p-3 bg-green-50 rounded-xl text-green-600 group-hover:bg-white transition shrink-0">
+                  <div className="p-3 bg-green-50 rounded-xl text-green-700 group-hover:bg-white transition shrink-0">
                     <FileText size={22} />
                   </div>
                   <span className="min-w-0">

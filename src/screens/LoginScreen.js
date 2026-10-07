@@ -80,7 +80,7 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
         <div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-[460px] border">
           <div className="flex flex-col items-center mb-8">
             <div className="w-20 h-20 bg-green-50 rounded-3xl flex items-center justify-center mb-5 border border-green-100">
-              <Shield size={40} className="text-green-600" />
+              <Shield size={40} className="text-green-700" />
             </div>
             <h1 className="text-2xl font-bold text-gray-800 mb-2">Doğrulama Kodu</h1>
             <p className="text-gray-500 text-center text-sm">
@@ -105,7 +105,7 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
           <button
             onClick={kodGonder}
             disabled={bekliyor || kod.length < 6}
-            className="w-full mt-5 bg-gradient-to-r from-green-600 to-teal-700 text-white font-bold py-4 rounded-xl shadow-lg transition disabled:opacity-40 flex items-center justify-center gap-2"
+            className="w-full mt-5 bg-gradient-to-r from-green-700 to-teal-700 text-white font-bold py-4 rounded-xl shadow-lg transition disabled:opacity-40 flex items-center justify-center gap-2"
           >
             {bekliyor ? <Loader2 className="animate-spin" size={20} /> : <>DOĞRULA <ChevronRight size={20} /></>}
           </button>
@@ -132,7 +132,7 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-500 to-teal-600" />
         <div className="flex flex-col items-center mb-10">
           <div className="w-24 h-24 bg-gradient-to-br from-green-50 to-emerald-100 rounded-3xl flex items-center justify-center mb-6 border border-green-100">
-            <Apple size={48} className="text-green-600" />
+            <Apple size={48} className="text-green-700" />
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Hoş Geldiniz</h1>
           <p className="text-gray-500 text-center">Kişiselleştirilmiş besin risk analizi sistemi</p>
@@ -184,7 +184,7 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
 
           <button
             onClick={girisYap} disabled={bekliyor}
-            className="w-full bg-gradient-to-r from-green-600 to-teal-700 hover:from-green-700 text-white font-bold py-4 rounded-xl shadow-lg transition disabled:opacity-60 flex items-center justify-center gap-2 text-lg"
+            className="w-full bg-gradient-to-r from-green-700 to-teal-700 hover:from-green-800 text-white font-bold py-4 rounded-xl shadow-lg transition disabled:opacity-60 flex items-center justify-center gap-2 text-lg"
           >
             {bekliyor ? <Loader2 className="animate-spin" size={20} /> : <>GİRİŞ YAP <ChevronRight size={20} /></>}
           </button>

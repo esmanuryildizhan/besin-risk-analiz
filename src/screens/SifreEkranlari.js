@@ -16,7 +16,7 @@ const Kutu = ({ simge: Simge, baslik, aciklama, children }) => (
     <div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-[460px] border border-gray-100">
       <div className="flex flex-col items-center mb-8">
         <div className="w-20 h-20 bg-green-50 rounded-3xl flex items-center justify-center mb-5 border border-green-100">
-          <Simge size={40} className="text-green-600" />
+          <Simge size={40} className="text-green-700" />
         </div>
         <h1 className="text-2xl font-bold text-gray-800 mb-2 text-center">{baslik}</h1>
         <p className="text-gray-500 text-center text-sm leading-relaxed">{aciklama}</p>
@@ -28,7 +28,7 @@ const Kutu = ({ simge: Simge, baslik, aciklama, children }) => (
 
 const girdiStili = 'w-full pl-14 pr-5 py-4 bg-gray-50 border border-gray-200 '
   + 'rounded-xl focus:border-green-500 outline-none text-gray-700';
-const dugmeStili = 'w-full bg-gradient-to-r from-green-600 to-teal-700 text-white '
+const dugmeStili = 'w-full bg-gradient-to-r from-green-700 to-teal-700 text-white '
   + 'font-bold py-4 rounded-xl shadow-lg transition disabled:opacity-40 '
   + 'flex items-center justify-center gap-2';
 

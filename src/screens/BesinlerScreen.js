@@ -159,7 +159,7 @@ const BesinDetay = ({ besin, onKapat }) => {
               <div key={b.test} className="bg-white rounded-xl border border-sky-100 p-4">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 mb-1">
                   <span className="font-bold text-gray-800">{b.test}</span>
-                  <span className="font-bold text-red-600">
+                  <span className="font-bold text-red-700">
                     {b.deger}{b.birim ? ` ${b.birim}` : ''}
                   </span>
                   <span className="text-xs text-gray-500">
@@ -326,7 +326,7 @@ export const DashboardScreen = ({ user }) => {
 
       <footer className="mt-12 pt-6 border-t border-gray-200 text-xs text-gray-500 leading-relaxed">
         Besin değerleri:{' '}
-        <a href="https://turkomp.tarimorman.gov.tr/" target="_blank" rel="noreferrer" className="text-green-600 underline">
+        <a href="https://turkomp.tarimorman.gov.tr/" target="_blank" rel="noreferrer" className="text-green-700 underline">
           TürKomp, Ulusal Gıda Kompozisyon Veri Tabanı v1.0
         </a>.
         <br />
