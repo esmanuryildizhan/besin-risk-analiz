@@ -4,11 +4,193 @@
 
 import React, { useState } from 'react';
 import {
-  User, Save, CheckCircle, Info, Activity, Loader2,
+  Activity, CheckCircle, Info, Loader2, Save, Shield, User,
 } from 'lucide-react';
 import { api } from '../api';
 import { HataKutusu, SecimKutusu } from '../components/ortak';
-import { HesapSilme } from '../kvkk/KvkkBilesenleri';
+import { HesapSilme, VeriIndirme } from '../kvkk/KvkkBilesenleri';
+
+/**
+ * İki aşamalı doğrulama kurulumu (profil ekranı).
+ *
+ * Akış: QR göster → kullanıcı taratıp kod girsin → doğrulanınca aç ve yedek
+ * kodları BİR KEZ göster. Kod doğrulanmadan açılmıyor; aksi hâlde kurulumu
+ * yanlış yapan kullanıcı kendi hesabından kilitlenirdi.
+ */
+const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
+  const [asama, setAsama] = useState('kapali');   // kapali | kurulum | kodlar
+  const [qr, setQr] = useState(null);
+  const [anahtar, setAnahtar] = useState('');
+  const [kod, setKod] = useState('');
+  const [yedekKodlar, setYedekKodlar] = useState([]);
+  const [sifre, setSifre] = useState('');
+  const [kapatmaAcik, setKapatmaAcik] = useState(false);
+  const [hata, setHata] = useState('');
+  const [bekliyor, setBekliyor] = useState(false);
+
+  const baslat = async () => {
+    setBekliyor(true); setHata('');
+    try {
+      const s = await api.ikiAsamaBaslat();
+      setQr(s.qr); setAnahtar(s.anahtar); setAsama('kurulum');
+    } catch (e) { setHata(e.message); } finally { setBekliyor(false); }
+  };
+
+  const dogrula = async () => {
+    setBekliyor(true); setHata('');
+    try {
+      const s = await api.ikiAsamaDogrula(kod);
+      setYedekKodlar(s.yedekKodlar); setAsama('kodlar'); setKod('');
+      onGuncelle(await api.profilimiGetir());
+    } catch (e) { setHata(e.message); } finally { setBekliyor(false); }
+  };
+
+  const kapat = async () => {
+    setBekliyor(true); setHata('');
+    try {
+      await api.ikiAsamaKapat(sifre);
+      setSifre(''); setKapatmaAcik(false); setAsama('kapali');
+      onGuncelle(await api.profilimiGetir());
+    } catch (e) { setHata(e.message); } finally { setBekliyor(false); }
+  };
+
+  // ───── Yedek kodlar: tek seferlik gösterim ─────
+  if (asama === 'kodlar') {
+    return (
+      <div className="mt-8 bg-white border-2 border-green-200 rounded-2xl p-6">
+        <h3 className="font-bold text-green-900 flex items-center gap-2 mb-2">
+          <CheckCircle size={20} className="text-green-600" /> İki aşamalı doğrulama açıldı
+        </h3>
+        <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+          Aşağıdaki yedek kodları güvenli bir yere kaydedin. Telefonunuza
+          erişemediğinizde her biri <strong>bir kez</strong> kullanılabilir.
+          Bu kodlar yalnızca şimdi gösteriliyor; sayfadan çıkınca bir daha
+          görüntülenemezler.
+        </p>
+        <div className="grid grid-cols-2 gap-2 bg-gray-50 rounded-xl p-4 border font-mono text-sm">
+          {yedekKodlar.map((k) => <div key={k} className="text-gray-700">{k}</div>)}
+        </div>
+        <button
+          onClick={() => { navigator.clipboard && navigator.clipboard.writeText(yedekKodlar.join('\n')); }}
+          className="mt-4 px-5 py-2.5 rounded-xl font-semibold border bg-white hover:bg-gray-50 text-sm"
+        >
+          Panoya kopyala
+        </button>
+        <button
+          onClick={() => setAsama('kapali')}
+          className="mt-4 ml-3 px-5 py-2.5 rounded-xl font-semibold bg-green-600 text-white text-sm"
+        >
+          Kaydettim, kapat
+        </button>
+      </div>
+    );
+  }
+
+  // ───── Kurulum: QR + kod ─────
+  if (asama === 'kurulum') {
+    return (
+      <div className="mt-8 bg-white border-2 border-green-100 rounded-2xl p-6">
+        <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
+          <Shield size={20} className="text-green-600" /> Doğrulayıcı uygulamayı bağlayın
+        </h3>
+        <div className="flex flex-col sm:flex-row gap-6">
+          <div className="shrink-0">
+            {qr && <img src={qr} alt="QR kodu" className="rounded-xl border" width={200} height={200} />}
+          </div>
+          <div className="flex-1 space-y-4">
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Telefonunuza <strong>Google Authenticator</strong> veya
+              <strong> Microsoft Authenticator</strong> kurun, uygulamayı açıp
+              QR kodu okutun.
+            </p>
+            <details className="text-xs text-gray-500">
+              <summary className="cursor-pointer font-semibold">Kamera çalışmıyorsa</summary>
+              <p className="mt-2">Bu anahtarı uygulamaya elle girin:</p>
+              <code className="block mt-1 p-2 bg-gray-50 rounded border break-all font-mono">{anahtar}</code>
+            </details>
+            <div>
+              <label className="text-xs font-bold text-gray-500 mb-2 block uppercase">
+                Uygulamada görünen kod
+              </label>
+              <input
+                value={kod}
+                onChange={(e) => setKod(e.target.value.replace(/\s/g, ''))}
+                placeholder="000000" inputMode="numeric"
+                className="w-full text-center text-2xl tracking-[0.3em] font-bold py-3 bg-gray-50 border rounded-xl outline-none focus:border-green-500"
+              />
+            </div>
+            <HataKutusu mesaj={hata} />
+            <div className="flex gap-3">
+              <button onClick={dogrula} disabled={bekliyor || kod.length < 6}
+                className="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-3 rounded-xl transition disabled:opacity-40 flex items-center gap-2">
+                {bekliyor ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle size={18} />}
+                Doğrula ve aç
+              </button>
+              <button onClick={() => { setAsama('kapali'); setHata(''); setKod(''); }}
+                className="px-6 py-3 rounded-xl font-bold border bg-white hover:bg-gray-50">
+                Vazgeç
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ───── Varsayılan: durum ve aç/kapat ─────
+  return (
+    <div className="mt-8 bg-white border rounded-2xl p-6">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-1">
+            <Shield size={20} className={user.totpEnabled ? 'text-green-600' : 'text-gray-400'} />
+            İki Aşamalı Doğrulama
+            {user.totpEnabled && (
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">AÇIK</span>
+            )}
+          </h3>
+          <p className="text-sm text-gray-600 leading-relaxed max-w-xl">
+            {user.totpEnabled
+              ? `Girişte şifrenizin yanı sıra telefonunuzdaki doğrulayıcı uygulamanın ürettiği kod isteniyor. Kalan yedek kod: ${user.yedekKodSayisi}.`
+              : 'Açtığınızda, şifrenizi bilen biri bile telefonunuza erişemeden hesabınıza giremez. Sağlık verisi tutulduğu için açılması önerilir.'}
+          </p>
+        </div>
+      </div>
+
+      <HataKutusu mesaj={hata} />
+
+      {!user.totpEnabled ? (
+        <button onClick={baslat} disabled={bekliyor}
+          className="mt-4 bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-3 rounded-xl transition disabled:opacity-50 flex items-center gap-2">
+          {bekliyor ? <Loader2 className="animate-spin" size={18} /> : <Shield size={18} />}
+          İki aşamalı doğrulamayı aç
+        </button>
+      ) : !kapatmaAcik ? (
+        <button onClick={() => setKapatmaAcik(true)}
+          className="mt-4 px-6 py-3 rounded-xl font-bold border text-gray-700 hover:bg-gray-50">
+          Kapat
+        </button>
+      ) : (
+        <div className="mt-4 space-y-3 max-w-md">
+          <p className="text-sm font-semibold text-gray-700">Kapatmak için şifrenizi girin:</p>
+          <input type="password" value={sifre} onChange={(e) => setSifre(e.target.value)}
+            placeholder="Şifreniz" autoComplete="current-password"
+            className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
+          <div className="flex gap-3">
+            <button onClick={kapat} disabled={bekliyor || !sifre}
+              className="bg-gray-800 hover:bg-gray-900 text-white font-bold px-6 py-3 rounded-xl transition disabled:opacity-40">
+              Kapat
+            </button>
+            <button onClick={() => { setKapatmaAcik(false); setSifre(''); setHata(''); }}
+              className="px-6 py-3 rounded-xl font-bold border bg-white hover:bg-gray-50">
+              Vazgeç
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
   const [form, setForm] = useState({
@@ -161,6 +343,10 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
           </div>
         </div>
       )}
+
+      <IkiAsamaliDogrulama user={user} onGuncelle={onGuncelle} />
+
+      <VeriIndirme />
 
       <HesapSilme onSilindi={onSilindi} />
     </div>

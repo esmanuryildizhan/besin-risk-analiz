@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node src/index.js",
-    "test": "node src/risk_test.js"
+    "test": "node src/risk_test.js && node src/guvenlik_test.js",
+    "postinstall": "prisma generate",
+    "build": "prisma migrate deploy",
+    "tohum": "prisma db seed"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -21,12 +24,15 @@
     "csv-parse": "^7.0.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^10.0.15",
+    "otplib": "^13.5.0",
     "pdfjs-dist": "^4.10.38",
-    "pg": "^8.22.0"
-  },
-  "devDependencies": {
-    "prisma": "^5.22.0"
+    "pg": "^8.22.0",
+    "prisma": "^5.22.0",
+    "qrcode": "^1.5.4"
   },
   "keywords": [],
   "author": "",

@@ -5,10 +5,10 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  AlertCircle, X, CheckCircle, FileText, Shield, Loader2,
-  ShieldAlert,
+  AlertCircle, AlertTriangle, X, CheckCircle, Download, FileText, Shield,
+  Loader2, ShieldAlert,
 } from 'lucide-react';
-import { api, tokenKaydet } from '../api';
+import { api, tokenKaydet, verileriniIndir } from '../api';
 import { HataKutusu, Modal, Yukleniyor } from '../components/ortak';
 
 /** Metinlerdeki **kalın** işaretlerini gerçek kalına çevirir. */
@@ -82,11 +82,37 @@ const KvkkPenceresi = ({ acik, onKapat, baslik, metin, surum, surumTarihi }) => 
  * İki beyanı toplayan ortak blok. Hem kayıt ekranında hem mevcut
  * kullanıcıların onay ekranında kullanılıyor.
  */
+/**
+ * DEMO UYARISI — veri girişinin TAM OLDUĞU yerde.
+ *
+ * Aynı uyarı aydınlatma metninin 7. bölümünde de var, ama orada kimse
+ * okumuyor. Uyarının işe yaraması için kişinin hastalığını yazacağı anda,
+ * göz hizasında olması gerekiyor.
+ *
+ * Bunun hukuki bir muafiyet sağlamadığını bilerek koyuyoruz: biri yine de
+ * gerçek verisini girerse yükümlülük doğar. Amaç sorumluluktan kaçmak değil,
+ * gerçek veri girilme İHTİMALİNİ düşürmek — yani asıl koruma olan veri
+ * minimizasyonuna hizmet etmek.
+ */
+export const DemoUyarisi = () => (
+  <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 flex gap-3 items-start">
+    <AlertTriangle size={22} className="text-amber-600 shrink-0 mt-0.5" />
+    <div className="text-sm text-amber-900 leading-relaxed">
+      <span className="font-bold">Bu bir demo uygulamasıdır.</span>{' '}
+      Lütfen gerçek sağlık bilgilerinizi girmeyin. Denemek için gerçek olmayan
+      hastalık, alerji ve tahlil bilgileri kullanın. Hesabınızı ve tüm
+      verilerinizi dilediğiniz an profil ekranından silebilirsiniz; uzun süre
+      giriş yapılmayan hesaplar ayrıca kendiliğinden silinir.
+    </div>
+  </div>
+);
+
 export const OnayBloku = ({ metinler, aydinlatma, setAydinlatma, riza, setRiza }) => {
   const [acikMetin, setAcikMetin] = useState(null);   // 'aydinlatma' | 'riza' | null
 
   return (
     <div className="space-y-5">
+      <DemoUyarisi />
       <KvkkPenceresi
         acik={acikMetin === 'aydinlatma'} onKapat={() => setAcikMetin(null)}
         baslik="Aydınlatma Metni" metin={metinler && metinler.aydinlatma}
@@ -219,6 +245,49 @@ export const OnayEkrani = ({ user, onOnaylandi, onCikis }) => {
           </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+/**
+ * Profil ekranındaki "verilerimi indir" bölümü.
+ *
+ * KVKK m.11: kişinin verisinin işlenip işlenmediğini öğrenme ve bilgi talep
+ * etme hakkı. GDPR m.15 (erişim) ve m.20 (taşınabilirlik).
+ *
+ * Silme hakkının yanında DURUYOR ama onun yerine geçmiyor: biri "hakkımda ne
+ * tutuluyor" sorusunu cevaplıyor, öteki veriyi ortadan kaldırıyor. Yalnızca
+ * silme sunulsa kullanıcı ilk soruyu ancak her şeyi kaybederek cevaplayabilirdi.
+ */
+export const VeriIndirme = () => {
+  const [bekliyor, setBekliyor] = useState(false);
+  const [hata, setHata] = useState('');
+
+  const indir = async () => {
+    setBekliyor(true); setHata('');
+    try {
+      await verileriniIndir();
+    } catch (e) { setHata(e.message); } finally { setBekliyor(false); }
+  };
+
+  return (
+    <div className="mt-8 bg-white border rounded-2xl p-6">
+      <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
+        <Download size={20} className="text-green-600" /> Verilerimi indir
+      </h3>
+      <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+        Hakkınızda saklanan tüm kişisel veriyi makine tarafından okunabilir
+        biçimde (JSON) indirebilirsiniz: hesap bilgileriniz, hastalık ve alerji
+        kayıtlarınız, tahlil sonuçlarınız, günlük takip kayıtlarınız ve onay
+        tarihleriniz. Şifreniz ve iki aşamalı doğrulama anahtarınız dosyaya
+        dâhil edilmez; bunlar kimlik doğrulama bilgisidir.
+      </p>
+      <HataKutusu mesaj={hata} />
+      <button onClick={indir} disabled={bekliyor}
+        className="mt-2 px-6 py-3 rounded-xl font-bold border-2 border-green-200 text-green-700 hover:bg-green-50 transition flex items-center gap-2 disabled:opacity-40">
+        {bekliyor ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
+        Verilerimi indir
+      </button>
     </div>
   );
 };

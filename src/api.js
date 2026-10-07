@@ -43,6 +43,40 @@ async function istek(yol, ayarlar = {}) {
   return veri;
 }
 
+/**
+ * Veri dökümünü indirir (KVKK m.11 / GDPR m.15, m.20).
+ *
+ * `istek` kullanılmıyor: o fonksiyon cevabı JSON olarak çözüyor, burada ise
+ * dosya olarak kaydedilmesi gerekiyor. Düz bir <a href> de olmuyor, çünkü
+ * istek Authorization başlığı taşımak zorunda — tarayıcı bunu bağlantıya
+ * ekleyemez. Bu yüzden blob alınıp geçici bir bağlantıyla indiriliyor.
+ */
+export async function verileriniIndir() {
+  const cevap = await fetch(`${API_URL}/api/me/verilerim`, {
+    headers: { Authorization: `Bearer ${tokenAl()}` },
+  });
+  if (!cevap.ok) {
+    let mesaj = `Sunucu hatası (${cevap.status})`;
+    try { mesaj = (await cevap.json()).error || mesaj; } catch (e) { /* gövde JSON değil */ }
+    throw new Error(mesaj);
+  }
+
+  // Dosya adını sunucunun verdiği başlıktan alıyoruz; yoksa kendimiz kuruyoruz.
+  const basliktan = (cevap.headers.get('Content-Disposition') || '').match(/filename="(.+?)"/);
+  const ad = basliktan ? basliktan[1] : 'verilerim.json';
+
+  const blob = await cevap.blob();
+  const adres = URL.createObjectURL(blob);
+  const bag = document.createElement('a');
+  bag.href = adres;
+  bag.download = ad;
+  document.body.appendChild(bag);
+  bag.click();
+  // Temizlik şart: object URL sayfa kapanana kadar bellekte kalırdı.
+  document.body.removeChild(bag);
+  URL.revokeObjectURL(adres);
+}
+
 export const api = {
   kayitOl: (bilgiler) =>
     istek('/api/register', { method: 'POST', body: JSON.stringify(bilgiler) }),
@@ -62,6 +96,43 @@ export const api = {
 
   girisYap: (email, password) =>
     istek('/api/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+
+  // --- İKİ AŞAMALI DOĞRULAMA ---
+  // girisYap 2FA açık bir hesapta token yerine { ikinciAsama, geciciBilet }
+  // döndürüyor; kod bununla doğrulanıyor.
+  girisKodDogrula: (geciciBilet, kod) =>
+    istek('/api/login/2fa', { method: 'POST', body: JSON.stringify({ geciciBilet, kod }) }),
+
+  // --- E-POSTA DOĞRULAMA ---
+  // Kayıt artık token döndürmüyor: { dogrulamaGerekli: true } dönüyor ve
+  // kullanıcı postadaki bağlantıya tıklayana kadar giriş yapamıyor.
+  ePostaDogrula: (bilet) =>
+    istek('/api/eposta/dogrula', { method: 'POST', body: JSON.stringify({ bilet }) }),
+
+  dogrulamaTekrarGonder: (email) =>
+    istek('/api/eposta/tekrar-gonder', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  // --- ŞİFRE SIFIRLAMA ---
+  // Sunucu, adres kayıtlı olsun olmasın AYNI yanıtı veriyor; arayüz de bu
+  // yüzden "posta gitti" demiyor, "kayıtlıysa gitti" diyor.
+  sifremiUnuttum: (email) =>
+    istek('/api/sifre/unuttum', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  // 2FA açık hesapta kod gerekiyor. Kod gönderilmezse sunucu hata değil
+  // { ikinciAsama: true } dönüyor; arayüz o zaman kodu soruyor.
+  sifreYenile: (bilet, password, kod) =>
+    istek('/api/sifre/yenile', {
+      method: 'POST',
+      body: JSON.stringify({ bilet, password, ...(kod ? { kod } : {}) }),
+    }),
+
+  ikiAsamaBaslat: () => istek('/api/2fa/baslat', { method: 'POST' }),
+
+  ikiAsamaDogrula: (kod) =>
+    istek('/api/2fa/dogrula', { method: 'POST', body: JSON.stringify({ kod }) }),
+
+  ikiAsamaKapat: (password) =>
+    istek('/api/2fa/kapat', { method: 'POST', body: JSON.stringify({ password }) }),
 
   profilimiGetir: () => istek('/api/me'),
 

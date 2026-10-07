@@ -2,6 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ARAYÜZ ÖLÇEĞİ
+ *
+ * Tailwind'in boyutları (yazı, iç boşluk, köşe yarıçapı, ikon aralıkları)
+ * rem cinsinden, yani kök yazı boyutuna bağlı. Burayı değiştirmek arayüzün
+ * TAMAMINI orantılı olarak küçültüyor — bileşenleri tek tek elden geçirmeye
+ * gerek kalmıyor ve hiçbir oran bozulmuyor.
+ *
+ * Yüzde kullanılıyor, piksel değil: yüzde kullanıcının tarayıcısında
+ * ayarladığı yazı boyutuna GÖRE çalışıyor. Piksel yazsaydık, görme güçlüğü
+ * nedeniyle yazıyı büyütmüş bir kullanıcının tercihini ezmiş olurduk.
+ *
+ * %100 = 16px (tarayıcı varsayılanı). Şu anki değer %87,5 = 14px, yani
+ * arayüzün tamamı %12,5 küçülmüş durumda.
+ *
+ * AYAR TEK SAYIDAN YAPILIYOR: daha büyük istenirse 93.75 (15px) ya da 100
+ * (16px) yazmak yeterli. 87.5 makul alt sınır; altına inince metin
+ * okunaklılığı düşmeye başlıyor.
+ */
+html {
+  font-size: 87.5%;
+}
+
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;

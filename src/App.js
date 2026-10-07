@@ -14,12 +14,38 @@ import { LabResultsScreen } from './screens/LabResultsScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { RegisterScreen } from './screens/RegisterScreen';
+import {
+  EPostaDogrulamaEkrani, SifremiUnuttumEkrani, SifreYenileEkrani,
+} from './screens/SifreEkranlari';
 
 export default function App() {
   const [ekran, setEkran] = useState('login');
   const [user, setUser] = useState(null);
   const [meta, setMeta] = useState({});
   const [hazir, setHazir] = useState(false);
+
+  // ŞİFRE SIFIRLAMA BAĞLANTISI
+  //
+  // Postadaki bağlantı /sifre-yenile?bilet=... adresine geliyor. Projede
+  // yönlendirme kütüphanesi (react-router) yok; ekranlar durum değişkeniyle
+  // seçiliyor. Bu yüzden bileti adres satırından bir kez okuyup durumda
+  // tutuyoruz. Kütüphane eklemek yalnızca bu tek adres için ağır olurdu.
+  //
+  // Bilet HEMEN adres satırından siliniyor (replaceState): tarayıcı geçmişinde
+  // ve ekran görüntüsünde kalmasın, kullanıcı adresi kopyalayıp paylaşırsa
+  // şifre sıfırlama yetkisini paylaşmış olmasın.
+  //
+  // İKİ ADRES VAR: /sifre-yenile ve /eposta-dogrula. İkisi de aynı kalıpla
+  // okunuyor, bu yüzden tek yardımcı.
+  const biletiOku = (yol) => {
+    if (typeof window === 'undefined') return null;
+    if (!window.location.pathname.startsWith(yol)) return null;
+    const bilet = new URLSearchParams(window.location.search).get('bilet');
+    if (bilet) window.history.replaceState({}, '', '/');
+    return bilet || null;
+  };
+  const [sifirlamaBileti, setSifirlamaBileti] = useState(() => biletiOku('/sifre-yenile'));
+  const [dogrulamaBileti, setDogrulamaBileti] = useState(() => biletiOku('/eposta-dogrula'));
 
   // Açılışta: meta verisini çek + token varsa oturumu geri yükle
   useEffect(() => {
@@ -49,10 +75,41 @@ export default function App() {
     return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]"><Yukleniyor /></div>;
   }
 
+  // Sıfırlama bağlantısıyla gelindiyse her şeyin önüne geçiyor: kullanıcının
+  // elinde geçerli bir bilet varsa yapmak istediği tek şey şifresini
+  // değiştirmek.
+  if (sifirlamaBileti) {
+    return (
+      <SifreYenileEkrani
+        bilet={sifirlamaBileti}
+        onBitti={() => { setSifirlamaBileti(null); setEkran('login'); }}
+      />
+    );
+  }
+
+  if (dogrulamaBileti) {
+    return (
+      <EPostaDogrulamaEkrani
+        bilet={dogrulamaBileti}
+        onGiris={(kullanici) => { setDogrulamaBileti(null); girisYapildi(kullanici); }}
+        onGeri={() => { setDogrulamaBileti(null); setEkran('login'); }}
+      />
+    );
+  }
+
   if (!user) {
+    if (ekran === 'sifremi-unuttum') {
+      return <SifremiUnuttumEkrani onGeri={() => setEkran('login')} />;
+    }
     return ekran === 'register'
-      ? <RegisterScreen meta={meta} onRegister={girisYapildi} onBack={() => setEkran('login')} />
-      : <LoginScreen onLogin={girisYapildi} onRegister={() => setEkran('register')} />;
+      ? <RegisterScreen meta={meta} onBack={() => setEkran('login')} />
+      : (
+        <LoginScreen
+          onLogin={girisYapildi}
+          onRegister={() => setEkran('register')}
+          onSifremiUnuttum={() => setEkran('sifremi-unuttum')}
+        />
+      );
   }
 
   // ONAY KAPISI — giriş yapmış ama onayı eksik/eskimiş kullanıcı uygulamanın

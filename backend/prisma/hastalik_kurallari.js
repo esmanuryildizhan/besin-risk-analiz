@@ -49,11 +49,6 @@ const KAYNAKLAR = {
       + 'or Prediabetes: A Consensus Report. Diabetes Care. 2019;42(5):731-754.',
     not: 'Amerikan Diyabet Derneği uzlaşı raporu.',
   },
-  FRANZ2017: {
-    kisa: 'Franz ve ark. 2017',
-    kunye: 'Franz MJ, MacLeod J, Evert A ve ark. Academy of Nutrition and Dietetics Nutrition '
-      + 'Practice Guideline for Type 1 and Type 2 Diabetes in Adults. J Acad Nutr Diet. 2017;117(10):1659-1679.',
-  },
   WARSHAW2021: {
     kisa: 'Warshaw & Edelman 2021',
     kunye: 'Warshaw H, Edelman SV. Practical Strategies to Help Reduce Added Sugars Consumption '
@@ -63,12 +58,6 @@ const KAYNAKLAR = {
     kisa: 'Amorim ve ark. 2024',
     kunye: 'Amorim D, Miranda F, Santos A ve ark. Assessing Carbohydrate Counting Accuracy: '
       + 'Current Limitations and Future Directions. Nutrients. 2024;16(14):2183.',
-  },
-  ATKINSON2021: {
-    kisa: 'Atkinson ve ark. 2021',
-    kunye: 'Atkinson FS, Brand-Miller JC, Foster-Powell K, Buyken AE, Goletzke J. International '
-      + 'tables of glycemic index and glycemic load values 2021: a systematic review. '
-      + 'Am J Clin Nutr. 2021;114(5):1625-1632. doi:10.1093/ajcn/nqab233',
   },
   VENN2007: {
     kisa: 'Venn & Green 2007',
@@ -84,11 +73,6 @@ const KAYNAKLAR = {
     kisa: 'Sacks ve ark. 2001',
     kunye: 'Sacks FM, Svetkey LP, Vollmer WM ve ark. Effects on Blood Pressure of Reduced Dietary '
       + 'Sodium and the Dietary Approaches to Stop Hypertension (DASH) Diet. N Engl J Med. 2001;344(1):3-10.',
-  },
-  APPEL2006: {
-    kisa: 'Appel ve ark. 2006',
-    kunye: 'Appel LJ, Brands MW, Daniels SR ve ark. Dietary Approaches to Prevent and Treat '
-      + 'Hypertension: A Scientific Statement From the American Heart Association. Hypertension. 2006;47(2):296-308.',
   },
   SALMAN2024: {
     kisa: 'Salman ve ark. 2024',

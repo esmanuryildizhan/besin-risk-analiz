@@ -1127,16 +1127,22 @@ test('B15 Kritik işaretli kurallar yalnızca gerçekten kritik öğelerde', () 
 
 test('B16 Her kaynak künyesi ya bir kurala bağlı ya metinde anılıyor', () => {
   // Öksüz künye, kaynakçada duran ama hiçbir şeyi desteklemeyen kayıt demek.
-  // BELGELENMİŞ İSTİSNALAR:
-  //   TAKDIR       - nöbetçi değer: "kaynaksız, bizim takdirimiz". Hiçbir kural
-  //                  buna bağlı DEĞİL ve bu iyi haber (kaynaksız kural yok).
-  //   ATKINSON2021 - glisemik indeks tablosu; veri girilmesi ertelendi, künye
-  //                  karar verildiğinde kullanılmak üzere bekliyor.
-  //   FRANZ2017    - AND diyabet kılavuzu. Kurallar yeniden yazılırken yerini
-  //   APPEL2006      AHA hipertansiyon bildirisi. EVERT2019 / SACKS2001 aldı.
-  //                  Kaliteli kaynaklar, silinmedi; kullanılacak mı kararı
-  //                  proje sahibinde.
-  const BEKLEYEN = new Set(['TAKDIR', 'ATKINSON2021', 'FRANZ2017', 'APPEL2006']);
+  // Kaynakçayı okuyan "bu da kullanılmış" sanır; oysa hiçbir eşik ona
+  // dayanmıyor. Bu yüzden öksüz künye bırakılmıyor, SİLİNİYOR.
+  //
+  // 7 Ekim 2026'da üç künye silindi: FRANZ2017 ve APPEL2006 (yerlerini
+  // EVERT2019 ve SACKS2001 almıştı), ATKINSON2021 (glisemik indeks verisi
+  // kararı henüz verilmedi — bekleyen karar kodda değil proje belgesinde
+  // duruyor: claude/glisemik-indeks-karari.md).
+  //
+  // TEK İSTİSNA — TAKDIR: nöbetçi değer, "kaynaksız, bizim takdirimiz"
+  // demek. Hiçbir GERÇEK kural buna bağlı değil ve bu iyi haber: kaynaksız
+  // eşik yok. Silinmiyor çünkü işlevi "kullanılmak" değil, kaynaksızlığı
+  // İFADE EDİLEBİLİR kılmak. Kaldırılsaydı, ileride takdire dayalı bir eşik
+  // ekleyen kişinin dürüst bir etiketi kalmaz, gerçek bir kaynağı yanlış
+  // yere gösterme ihtimali doğardı. Ayrıca test dosyasındaki kurgu kurallar
+  // kaynak olarak bunu kullanıyor.
+  const BEKLEYEN = new Set(['TAKDIR']);
   let prosa = '';
   HASTALIKLAR.forEach((h) => {
     prosa += ` ${h.note || ''}`;
@@ -1151,11 +1157,37 @@ test('B16 Her kaynak künyesi ya bir kurala bağlı ya metinde anılıyor', () =
     if (k.kaynak) kuralKaynaklari.add(k.kaynak);
   }));
 
+  // ÖLÇÜ DÜZELTİLDİ (7 Ekim 2026). Eskiden künyenin kısa adındaki ÜÇ
+  // HARFTEN UZUN HERHANGİ BİR KELİMEYİ metinde arıyordu. Sorun: kısa adların
+  // neredeyse hepsinde "ark." geçiyor ve "ark." metinde her yerde var. Yani
+  // kısa adı "ve ark." içeren her künye KENDİLİĞİNDEN "anılmış" sayılıyordu —
+  // test öksüz künye yakalayamıyordu. Uydurma bir öksüz künye eklenerek
+  // sınandı ve gerçekten yakalamadığı görüldü.
+  //
+  // Yeni ölçü: dolgu kelimeleri ("ve", "ark.", "vd.") ve yılın kendisi
+  // atılıyor, kalan BELİRTEÇ (yazar soyadı / kurum) metinde aranıyor; künyede
+  // yıl varsa belirteç ile yılın AYNI CİVARDA (150 karakter) geçmesi
+  // isteniyor. Böylece "EFSA" kelimesinin başka bir yerde geçmesi, EFSA'nın
+  // 2010 künyesini anılmış saymıyor.
+  //
+  // Yeni ölçü mevcut 28 künyenin tamamına uygulandı: hiçbirini yanlışlıkla
+  // öksüz göstermiyor. (Sıkılaştırmadan önce doğrulandı.)
+  const DOLGU = new Set(['ve', 'ark', 'ark.', 'vd', 'vd.', 'the', 'and', 'ile']);
+  const belirtecler = (kisa) => (kisa || '')
+    .split(/[\s,()]+/)
+    .map((x) => x.replace(/[.,;]+$/, ''))
+    .filter((x) => x.length > 2 && !DOLGU.has(x.toLowerCase()) && !/^\d{4}$/.test(x));
+
   const oksuz = Object.entries(KAYNAKLAR).filter(([anahtar, v]) => {
     if (kuralKaynaklari.has(anahtar) || BEKLEYEN.has(anahtar)) return false;
-    // Künyenin yazar/kurum adı metinde anılıyor mu? (ör. "de Souza 2015")
-    const adlar = (v.kisa || '').split(/[\s,]+/).filter((p) => p.length > 2);
-    return !adlar.some((p) => prosa.includes(p));
+    const bs = belirtecler(v.kisa);
+    if (!bs.length) return true;   // ayırt edici kelimesi yok -> anılmış sayılamaz
+    const yil = (String(v.kisa || '').match(/\d{4}/) || [''])[0];
+    return !bs.some((p) => {
+      if (!yil) return prosa.includes(p);
+      const kacis = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`${kacis}[^]{0,150}?${yil}`).test(prosa);
+    });
   }).map(([anahtar, v]) => `${anahtar} (${v.kisa})`);
   ihlalYok(oksuz, 'Hiçbir yerde anılmayan kaynak künyesi');
 });

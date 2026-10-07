@@ -145,10 +145,24 @@ async function main() {
     throw new Error(`CSV bulunamadı: ${CSV_YOLU}\nÖnce data-import klasöründe: python turkomp_birlestir.py`);
   }
 
-  // DiaryEntry kayıtları Food'a bağlı; varsa besinleri silmek onları bozar
+  // GÜNLÜK KAYDI VARSA BESİNLER YENİDEN YÜKLENMİYOR.
+  //
+  // Sebebi değişti: eskiden DiaryEntry.foodId bir yabancı anahtardı ve besinleri
+  // silmek kayıtları bozardı. Artık besin kimliği şifreli (foodRef) ve yabancı
+  // anahtar yok — ama tehlike kalktı değil, YER DEĞİŞTİRDİ: besinler silinip
+  // yeniden eklenince otomatik kimlikler kaldığı yerden devam ediyor, yani eski
+  // kayıtların foodRef'i artık var olmayan kimliklere işaret ediyor. Veri tabanı
+  // bunu artık engelleyemediği için denetim buraya taşındı.
   const gunlukSayisi = await prisma.diaryEntry.count();
   if (gunlukSayisi > 0) {
-    throw new Error(`${gunlukSayisi} günlük kaydı var; Food tablosu güvenle yeniden yüklenemez.`);
+    throw new Error(
+      `${gunlukSayisi} günlük kaydı var; besin tablosu yeniden yüklenirse bu `
+      + 'kayıtların besin bağları kopar.\n\n'
+      + 'Durumu görmek için:   node prisma/durum_kontrol.js\n'
+      + 'Kayıtlar gözden çıkarılabilirse sıfırdan kurmak için:\n'
+      + '  npx prisma migrate reset\n'
+      + '(bu komut veritabanını tamamen siler, göçleri yeniden uygular ve seed çalıştırır)',
+    );
   }
 
   console.log('Eski besin kayıtları siliniyor...');

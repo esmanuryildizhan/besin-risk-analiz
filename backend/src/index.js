@@ -6,6 +6,18 @@
 // UÇ NOKTALAR (endpoint)
 //   POST /api/register        kayıt ol
 //   POST /api/login           giriş yap -> token döner
+//   POST /api/login/2fa       iki aşamalı doğrulama kodu
+//   POST /api/eposta/dogrula  kayıt sonrası adres doğrulama
+//   POST /api/eposta/tekrar-gonder  yeni doğrulama bağlantısı
+//   POST /api/sifre/unuttum   sıfırlama bağlantısı istenir
+//   POST /api/sifre/yenile    bağlantıdaki biletle yeni şifre
+//   POST /api/2fa/baslat      2FA kurulumunu başlat       (token gerekir)
+//   POST /api/2fa/dogrula     kurulumu kodla onayla       (token gerekir)
+//   POST /api/2fa/kapat       2FA'yı kapat                (token gerekir)
+//   GET  /api/kvkk            aydınlatma ve rıza metinleri
+//   POST /api/onay            onay kaydı                  (token gerekir)
+//   GET  /api/me/verilerim    tüm kişisel veriyi indir    (token gerekir)
+//   DELETE /api/me            hesabı ve tüm veriyi sil    (token gerekir)
 //   GET  /api/me              profilimi getir            (token gerekir)
 //   PUT  /api/me              profilimi güncelle         (token gerekir)
 //   GET  /api/foods           besin ara/listele          (token isteğe bağlı)
@@ -31,6 +43,7 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
 
 const { riskHesapla } = require('./risk');
@@ -40,11 +53,27 @@ const {
 // Çeviri ortak dosyada: denetim araçları da aynısını kullanıyor (bkz. kural_cevir.js).
 const { kuraliCoz } = require('./kural_cevir');
 const KVKK = require('./kvkk_metinleri');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const totp = require('./totp');
+const kripto = require('./kripto');
+const eposta = require('./eposta');
+const saklama = require('./saklama');
+const {
+  biletOzeti, biletDamgadanSonraMi, kilitKarari, kilitliMi,
+} = require('./oturum');
+const gunluk = require('./gunluk');
+const { kalemiCoz, gunKaydiniCoz, kalemiDondur } = gunluk;
+const QRCode = require('qrcode');
 
 const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
+
+// Oturum biletinin ömrü. Kısaltmak çalıntı biletin işe yaradığı süreyi
+// kısaltır; uzatmak kullanıcıyı daha az yorar. Bkz. oturumBileti().
+const OTURUM_SURESI = '1d';
 
 if (!JWT_SECRET) {
   console.error('HATA: .env dosyasında JWT_SECRET yok. Örnek:\n  JWT_SECRET="gizli-bir-cumle-yaz"');
@@ -61,6 +90,61 @@ if (!JWT_SECRET) {
 // (yani yerelde) localhost:3000.
 const IZINLI_KOKEN = process.env.FRONTEND_URL || 'http://localhost:3000';
 app.use(cors({ origin: IZINLI_KOKEN, credentials: true }));
+
+// Güvenlik başlıkları. API JSON döndürüyor, sayfa sunmuyor; bu yüzden
+// tarayıcıya "bu içerikte HTML arama, MIME tipini tahmin etme" diyen
+// başlıklar işe yarıyor, içerik güvenlik politikası (CSP) ise gereksiz.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
+// Render gibi ortamlarda istek bir vekil sunucudan geçiyor. Bu ayar olmadan
+// hız sınırlayıcı herkesi TEK bir IP sanar ve bir kullanıcının denemeleri
+// diğerlerini de kilitler. 1 = yalnızca en yakın vekile güven.
+app.set('trust proxy', 1);
+
+/**
+ * Hız sınırlayıcılar — kaba kuvvet ve kaynak tüketimi saldırılarına karşı.
+ *
+ * Giriş/kayıt ayrı ve dar tutuluyor: şifre deneme saldırısının asıl hedefi
+ * orası. Sağlık verisi tutan bir uygulamada bir hesabın ele geçirilmesi,
+ * hastalık ve tahlil bilgilerinin ele geçirilmesi demek.
+ */
+const girisSinirlayici = rateLimit({
+  windowMs: 15 * 60 * 1000,     // 15 dakika
+  limit: 10,                    // IP başına 10 deneme
+  message: { error: 'Çok fazla deneme yapıldı. Lütfen 15 dakika sonra tekrar deneyin.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // başarılı girişler sayılmıyor
+});
+
+// Şifre sıfırlama ayrı ve DAHA SIKI sınırlanıyor: her istek bir e-posta
+// gönderiyor. Sınır olmasaydı bu uç nokta başkasının posta kutusunu
+// doldurmak için kullanılabilirdi (ve posta hesabı günlük kotayı aşardı).
+const sifirlamaSinirlayici = rateLimit({
+  windowMs: 60 * 60 * 1000,     // 1 saat
+  limit: 5,
+  message: { error: 'Çok fazla sıfırlama isteği gönderildi. Lütfen bir saat sonra deneyin.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// PDF ayrıştırma CPU yiyor (pdfjs). Dosya en çok 3 MB (bkz. PDF_SINIRI),
+// ayrıca sayfa sınırı ve zaman aşımı var (bkz. tahlil_ayristir.js).
+const pdfSinirlayici = rateLimit({
+  windowMs: 60 * 60 * 1000,     // 1 saat
+  limit: 20,
+  message: { error: 'Saatlik PDF yükleme sınırına ulaşıldı.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Genel sınır — geri kalan her şey için geniş, yalnızca kötüye kullanımı keser.
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 app.use(express.json());   // gelen JSON gövdeyi otomatik çözer
 
 // ---------------------------------------------------------------------------
@@ -128,11 +212,26 @@ async function kullaniciyiCoz(req, _res, next) {
   const token = baslik.startsWith('Bearer ') ? baslik.slice(7) : null;
   if (token) {
     try {
-      const veri = jwt.verify(token, JWT_SECRET);
-      req.kullanici = await prisma.user.findUnique({
+      // Algoritma SABİTLENİYOR. Sabitlenmezse, kütüphanenin ileride
+      // kabul edebileceği başka bir algoritmayla imzalanmış bir bilet
+      // geçerli sayılabilir. Biz yalnızca HS256 üretiyoruz, yalnızca
+      // HS256 kabul ediyoruz.
+      const veri = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+      // GÜVENLİK: iki aşamalı doğrulamanın ARA bileti buraya giremez.
+      // O bilet de userId taşıyor; bu kontrol olmasaydı, şifreyi bilen ama
+      // 2FA kodunu giremeyen biri ara biletle tam erişim alırdı — yani 2FA
+      // hiçbir işe yaramazdı.
+      if (veri.asama === '2fa') return next();
+      const bulunan = await prisma.user.findUnique({
         where: { id: veri.userId },
         include: { allergies: true, diseases: true },
       });
+      // ŞİFRE DEĞİŞTİYSE ESKİ BİLETLER GEÇERSİZ. Birim çevrimi ve sınır
+      // durumları src/oturum.js içinde, testleriyle birlikte.
+      if (bulunan && !biletDamgadanSonraMi(veri.iat, bulunan.oturumlarGecersizAt)) {
+        return next();   // misafir gibi davran
+      }
+      req.kullanici = bulunan;
     } catch (e) {
       // geçersiz/süresi dolmuş token -> misafir gibi davran
     }
@@ -141,6 +240,182 @@ async function kullaniciyiCoz(req, _res, next) {
 }
 
 /** Token ZORUNLU olan uç noktalar için. */
+/**
+ * Beklenmeyen sunucu hatalarını karşılar.
+ *
+ * NİYE hata.message DOĞRUDAN DÖNDÜRÜLMÜYOR: Prisma hataları tablo ve sütun
+ * adlarını, bazen sorgu parçalarını içeriyor. Bunları dışarı vermek, veri
+ * tabanı yapısını saldırgana anlatmak demek. Gerçek hata sunucu günlüğüne
+ * yazılıyor (geliştirici görebiliyor), kullanıcıya genel bir mesaj gidiyor.
+ *
+ * Kullanıcı hatalarında (400/401/404) bu fonksiyon kullanılmıyor; oralarda
+ * mesajın açık olması gerekiyor ve o mesajları biz yazıyoruz.
+ */
+// TOTP temel anahtarı. Ayrı değişken yoksa JWT_SECRET'ten türetiliyor
+// (gerekçesi src/totp.js içinde).
+const TOTP_TEMEL = process.env.TOTP_ANAHTARI || JWT_SECRET;
+
+/* ──────────────────────────────────────────────────────────────────────────
+   İKİ AŞAMALI DOĞRULAMA (TOTP) YARDIMCILARI
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ──────────────────────────────────────────────────────────────────────────
+   GÜVENLİK GÜNLÜĞÜ  (OWASP A09: Security Logging and Monitoring Failures)
+   ──────────────────────────────────────────────────────────────────────────
+
+   NİYE GEREKLİ: başarısız giriş denemeleri kaydedilmezse, birinin bir hesabı
+   kaba kuvvetle zorladığı hiç görülmez. Hız sınırlayıcı denemeyi yavaşlatıyor
+   ama olup bittiğini kimseye söylemiyor.
+
+   E-POSTA MASKELENİYOR. Sunucu günlüğü de kişisel veri içeren bir kayıt
+   ortamıdır; adresin tamamını yazmak gereksiz veri işlemek olurdu. Maskeli
+   biçim ("es***@gmail.com") saldırının hangi hesaba yöneldiğini anlamaya
+   yetiyor, kimliği ortaya koymuyor — amaçla sınırlı veri işleme (KVKK m.4).
+
+   ŞİFRE, KOD VE BİLET ASLA YAZILMIYOR. Günlükte düz şifre tutmak,
+   veritabanında tutmaktan farksızdır.
+*/
+function adresiMaskele(adres) {
+  const d = String(adres || '');
+  const at = d.indexOf('@');
+  if (at < 1) return '(geçersiz adres)';
+  const bas = d.slice(0, Math.min(2, at));
+  return `${bas}***${d.slice(at)}`;
+}
+
+function guvenlikGunlugu(olay, req, ek = '') {
+  const ip = req.ip || '(bilinmiyor)';
+  const zaman = new Date().toISOString();
+  console.warn(`[GÜVENLİK] ${zaman} ${olay} ip=${ip}${ek ? ` ${ek}` : ''}`);
+}
+
+/**
+ * Şifre doğru ama 2FA açıksa verilen KISA ÖMÜRLÜ bilet.
+ *
+ * Normal oturum biletinden ayrı tutuluyor (`asama: '2fa'`), çünkü bu bilet
+ * hiçbir veriye erişim vermemeli — yalnızca "şifreyi doğru girdim" demeli.
+ * 5 dakika içinde kod girilmezse baştan başlanır.
+ */
+/**
+ * Normal oturum bileti.
+ *
+ * SÜRE 1 GÜN. Önceden 7 gündü. Bilet imzalıdır, yani sunucu onu geri
+ * çağıramaz: çalınan bir bilet süresi dolana kadar geçerli kalır. Bu yüzden
+ * süre, kullanıcıyı her gün şifre sormakla yormamakla çalıntı biletin
+ * kullanılabileceği pencereyi kısaltmak arasındaki denge.
+ *
+ * "Oturumu kapat" dendiğinde bilet tarayıcıdan siliniyor ve kullanıcı yeniden
+ * giriş yapıyor; yani süreyi kısaltmak oturum kapatmanın yerine geçmez,
+ * kullanıcının kapatmayı unuttuğu durumu sınırlar.
+ */
+function oturumBileti(userId) {
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: OTURUM_SURESI });
+}
+
+function geciciBilet(userId) {
+  return jwt.sign({ userId, asama: '2fa' }, JWT_SECRET, { expiresIn: '5m' });
+}
+
+/**
+ * İkinci aşama kodunu doğrular: önce doğrulayıcı uygulamanın kodu, tutmazsa
+ * tek kullanımlık yedek kodlar.
+ *
+ * NİYE AYRI FONKSİYON: aynı denetim iki yerde gerekiyor — girişin ikinci
+ * aşamasında ve şifre sıfırlamada. İki kopya kalsaydı birinde yapılan
+ * düzeltme ötekine geçmezdi.
+ */
+async function ikinciAsamaDogru(user, kod) {
+  if (!kod) return false;
+  const temiz = String(kod).replace(/\s/g, '').toUpperCase();
+  const anahtar = totp.coz(user.totpSecret, TOTP_TEMEL);
+  if (totp.gecerliMi(temiz, anahtar)) return true;
+
+  for (const ozet of user.totpYedekKodlari || []) {
+    /* eslint-disable no-await-in-loop */
+    if (await bcrypt.compare(temiz, ozet)) {
+      // Yedek kod TEK KULLANIMLIK: kullanıldığı anda listeden çıkıyor.
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { totpYedekKodlari: user.totpYedekKodlari.filter((x) => x !== ozet) },
+      });
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Tek kullanımlık yedek kodlar. Kullanıcıya bir kez gösterilir. */
+function yedekKodUret() {
+  const kodlar = [];
+  for (let i = 0; i < 8; i += 1) {
+    // Karışması kolay karakterler (0/O, 1/I) bilerek dışarıda.
+    const harfler = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let kod = '';
+    for (let j = 0; j < 10; j += 1) {
+      kod += harfler[crypto.randomInt(harfler.length)];
+      if (j === 4) kod += '-';
+    }
+    kodlar.push(kod);
+  }
+  return kodlar;
+}
+
+/**
+ * Veritabanından gelen şifreli tahlil satırını okunur hâle getirir.
+ *
+ * TEK YER olması önemli: her sorgudan sonra elle çözmeye kalksaydık bir
+ * yerde unutulur ve kullanıcıya şifreli metin görünürdü — ya da daha kötüsü,
+ * kural motoru şifreli metni "test adı" sanıp sessizce yanlış çalışırdı.
+ */
+/**
+ * Hastalık/alerji listesini çözer ve ÇÖZÜLEMEYENİ SESSİZCE YUTMAZ.
+ *
+ * NİYE ÖNEMLİ: anahtar yanlışsa ya da kayıt bozuksa çözme null döner. Bunu
+ * sessizce listeden düşürürsek, kullanıcı "hiç hastalığı yokmuş" gibi
+ * değerlendirilir ve RİSKLİ besinler UYGUN görünür. Yani şifreleme hatası,
+ * bir sağlık uygulamasında sessizce YANLIŞ VE TEHLİKELİ sonuca dönüşür.
+ *
+ * Çözülemeyen kayıt listeden çıkıyor (şifreli metni kural motoruna vermek
+ * daha kötü olurdu) ama günlüğe hata basılıyor ki fark edilsin.
+ */
+function cozVeDenetle(kayitlar, tur, userId) {
+  const cozulen = [];
+  let bozuk = 0;
+  for (const k of kayitlar) {
+    const d = kripto.coz(k.name);
+    if (d === null) bozuk += 1;
+    else cozulen.push(d);
+  }
+  if (bozuk > 0) {
+    console.error(
+      `[KRİTİK] Kullanıcı ${userId}: ${bozuk} ${tur} kaydı ÇÖZÜLEMEDİ. `
+      + 'Şifreleme anahtarı değişmiş olabilir. Bu kullanıcının risk '
+      + 'değerlendirmesi EKSİK yapılıyor.',
+    );
+  }
+  return cozulen;
+}
+
+function tahliliCoz(satir) {
+  return {
+    ...satir,
+    testName: kripto.coz(satir.testName),
+    value: kripto.sayiCoz(satir.value),
+    unit: kripto.coz(satir.unit),
+    refLow: kripto.sayiCoz(satir.refLow),
+    refHigh: kripto.sayiCoz(satir.refHigh),
+    valueOp: kripto.coz(satir.valueOp),
+    textValue: kripto.coz(satir.textValue),
+    pdfYorumu: kripto.coz(satir.pdfYorumu),
+    pdfAralik: kripto.coz(satir.pdfAralik),
+  };
+}
+
+function sunucuHatasi(res, hata, nerede) {
+  console.error(`[HATA] ${nerede}:`, hata);
+  res.status(500).json({ error: 'Beklenmeyen bir sunucu hatası oluştu.' });
+}
+
 function girisGerekli(req, res, next) {
   if (!req.kullanici) return res.status(401).json({ error: 'Giriş yapmanız gerekiyor.' });
   next();
@@ -149,8 +424,8 @@ function girisGerekli(req, res, next) {
 function profilCikar(user) {
   if (!user) return { allergies: [], diseases: [], diet: 'Normal' };
   return {
-    allergies: user.allergies.map((a) => a.name),
-    diseases: user.diseases.map((d) => d.name),
+    allergies: cozVeDenetle(user.allergies, 'alerji', user.id),
+    diseases: cozVeDenetle(user.diseases, 'hastalık', user.id),
     diet: user.diet || 'Normal',
   };
 }
@@ -165,12 +440,14 @@ function kullaniciyiDondur(user) {
     email: user.email,
     gender: user.gender,
     diet: user.diet,
-    allergies: user.allergies ? user.allergies.map((a) => a.name) : [],
-    diseases: user.diseases ? user.diseases.map((d) => d.name) : [],
+    allergies: user.allergies ? cozVeDenetle(user.allergies, 'alerji', user.id) : [],
+    diseases: user.diseases ? cozVeDenetle(user.diseases, 'hastalık', user.id) : [],
     // Arayüz buna bakıp onay ekranını gösteriyor. Şifre özeti gibi hassas
     // alanlar burada YOK — bu fonksiyon "dışarı ne çıkar" kapısı.
     onayGerekli: onayGerekliMi(user),
     rizaSurumu: user.rizaSurumu || null,
+    totpEnabled: !!user.totpEnabled,
+    yedekKodSayisi: (user.totpYedekKodlari || []).length,
   };
 }
 
@@ -194,7 +471,7 @@ app.use(kullaniciyiCoz);
 // ---------------------------------------------------------------------------
 // KİMLİK DOĞRULAMA
 // ---------------------------------------------------------------------------
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', girisSinirlayici, async (req, res) => {
   try {
     const {
       name, surname, email, password, gender, diet, allergies = [], diseases = [],
@@ -217,11 +494,28 @@ app.post('/api/register', async (req, res) => {
           + 'değerlendirme yapmak olduğu için, bu veriler olmadan çalışamıyor.',
       });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Şifre en az 6 karakter olmalı.' });
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı.' });
     }
+    // HESAP SAYIMI (account enumeration) KAPATILDI.
+    // Eskiden burada 409 "Bu e-posta zaten kayıtlı" dönüyordu; bu, bir adresin
+    // sistemde olup olmadığını sorgulamaya yarıyordu. Sağlık verisi tutan bir
+    // uygulamada "şu kişi buraya kayıtlı" bilgisi başlı başına ifşadır.
+    // Artık yanıt her iki durumda da AYNI; durumu yalnızca adresin SAHİBİ
+    // kendisine giden postadan öğreniyor.
+    const ayniYanit = {
+      dogrulamaGerekli: true,
+      mesaj: 'Hesabınızı kullanmaya başlamak için e-posta adresinize gönderilen '
+        + 'bağlantıya tıklayın. Posta gelmediyse gereksiz (spam) klasörünü kontrol edin.',
+    };
+
     const varMi = await prisma.user.findUnique({ where: { email } });
-    if (varMi) return res.status(409).json({ error: 'Bu e-posta zaten kayıtlı.' });
+    if (varMi) {
+      eposta.zatenKayitliGonder(email)
+        .catch((h) => console.error('[POSTA] Bilgilendirme gönderilemedi:', h.message));
+      guvenlikGunlugu('var olan adresle kayıt denemesi', req, `hesap=${adresiMaskele(email)}`);
+      return res.status(201).json(ayniYanit);
+    }
 
     // Şifreyi ASLA düz metin saklamıyoruz; bcrypt ile hash'liyoruz.
     const passwordHash = await bcrypt.hash(password, 10);
@@ -233,20 +527,25 @@ app.post('/api/register', async (req, res) => {
         aydinlatmaOkunduAt: new Date(),
         acikRizaAt: new Date(),
         rizaSurumu: KVKK.SURUM,
-        allergies: { create: allergies.map((a) => ({ name: a })) },
-        diseases: { create: diseases.map((d) => ({ name: d })) },
+        allergies: { create: allergies.map((a) => ({ name: kripto.sifrele(a) })) },
+        diseases: { create: diseases.map((d) => ({ name: kripto.sifrele(d) })) },
       },
       include: { allergies: true, diseases: true },
     });
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ token, user: kullaniciyiDondur(user) });
+    // OTURUM BİLETİ VERİLMİYOR. Kullanıcı e-postasını doğrulayana kadar
+    // içeri giremiyor; aksi hâlde doğrulama bir formaliteye dönerdi.
+    const baglanti = await dogrulamaBiletiUret(user.id);
+    eposta.dogrulamaGonder(email, baglanti, DOGRULAMA_SURESI_SAAT)
+      .catch((h) => console.error('[POSTA] Doğrulama gönderilemedi:', h.message));
+
+    res.status(201).json(ayniYanit);
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/register');
   }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', girisSinirlayici, async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await prisma.user.findUnique({
@@ -254,13 +553,520 @@ app.post('/api/login', async (req, res) => {
       include: { allergies: true, diseases: true },
     });
     // Güvenlik: "e-posta yok" ile "şifre yanlış" ayrımını dışarıya vermiyoruz.
-    const dogruMu = user ? await bcrypt.compare(password || '', user.passwordHash) : false;
-    if (!dogruMu) return res.status(401).json({ error: 'E-posta veya şifre hatalı.' });
+    // HESAP KİLİDİ — şifre KONTROL EDİLMEDEN önce bakılıyor. Sonra bakılsaydı
+    // kilitli hesapta bile şifre denemesi yapılabilir, kilit işe yaramazdı.
+    if (user && kilitliMi(user.kilitBitisi)) {
+      const kalanDk = Math.ceil((user.kilitBitisi - Date.now()) / 60000);
+      guvenlikGunlugu('kilitli hesaba giriş denemesi', req,
+        `hesap=${adresiMaskele(email)}`);
+      return res.status(429).json({
+        error: `Çok fazla hatalı deneme yapıldı. Bu hesap ${kalanDk} dakika sonra `
+          + 'yeniden denenebilir. Şifrenizi hatırlamıyorsanız "Şifremi unuttum" '
+          + 'bağlantısını kullanabilirsiniz.',
+      });
+    }
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const dogruMu = user ? await bcrypt.compare(password || '', user.passwordHash) : false;
+    if (!dogruMu) {
+      if (user) {
+        // SAYAÇ HESABA BAĞLI. Hız sınırlayıcı IP başına çalışıyor; IP
+        // değiştirebilen saldırgan onu aşabiliyordu. Bu sayaç aşılamaz.
+        // Karar src/oturum.js içinde ve testlerle sabitlenmiş; burada
+        // yalnızca uygulanıyor.
+        const karar = kilitKarari(user.basarisizGiris);
+        await prisma.user.update({
+          where: { id: user.id },
+          data: karar.kilitBitisi === undefined
+            ? { basarisizGiris: karar.basarisizGiris }
+            : karar,
+        });
+        if (karar.kilitBitisi) {
+          guvenlikGunlugu('HESAP KİLİTLENDİ', req, `hesap=${adresiMaskele(email)}`);
+        }
+      }
+      // Hesabın var olup olmadığı günlüğe YAZILIYOR (kullanıcıya değil):
+      // "kayıtlı olmayan adreslere deneme" ile "kayıtlı hesaba şifre deneme"
+      // farklı saldırılar ve ayırt edilmeleri gerekiyor.
+      guvenlikGunlugu('giriş başarısız', req,
+        `hesap=${adresiMaskele(email)} kayıtlı=${user ? 'evet' : 'hayır'}`);
+      return res.status(401).json({ error: 'E-posta veya şifre hatalı.' });
+    }
+
+    // E-POSTA DOĞRULANMAMIŞSA İÇERİ ALINMIYOR.
+    // Şifre doğru olduğu için burada "bu hesap var" bilgisini vermiş oluyoruz;
+    // sakıncası yok, çünkü şifreyi bilen zaten hesabın sahibi ya da şifreyi ele
+    // geçirmiş biri — ikisi de hesabın varlığını zaten biliyor.
+    if (!user.ePostaDogrulandiAt) {
+      return res.status(403).json({
+        dogrulanmamis: true,
+        error: 'E-posta adresiniz henüz doğrulanmadı. Kayıt sırasında gönderilen '
+          + 'bağlantıya tıklayın ya da yeni bir bağlantı isteyin.',
+      });
+    }
+
+    // Başarılı giriş: sayacı sıfırlıyor, son hareketi damgalıyor ve varsa
+    // silme uyarısını kaldırıyor — kullanıcı döndüyse hesap kurtulmuş olur.
+    //
+    // DAMGA 2FA'DAN ÖNCE ATILIYOR, bilerek: şifresini doğru giren ama
+    // doğrulayıcı uygulamasıyla uğraşan bir kullanıcı o sırada hesabı
+    // silinecek diye telaşa düşmemeli. Şifreyi bilmek zaten hareket
+    // sayılacak kadar güçlü bir işaret.
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        basarisizGiris: 0,
+        kilitBitisi: null,
+        sonGirisAt: new Date(),
+        silmeUyarisiAt: null,
+      },
+    });
+
+    // Süpürme beklenmiyor: kullanıcının girişini yavaşlatmamalı.
+    saklamaSuresiniUygula();
+
+    // 2FA açıksa oturum bileti BURADA verilmiyor. Şifre doğru olsa bile
+    // kullanıcı henüz içeri girmiş sayılmıyor; yalnızca ikinci aşamaya
+    // geçme hakkı kazanıyor.
+    if (user.totpEnabled) {
+      return res.json({ ikinciAsama: true, geciciBilet: geciciBilet(user.id) });
+    }
+
+    const token = oturumBileti(user.id);
     res.json({ token, user: kullaniciyiDondur(user) });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/login');
+  }
+});
+
+/* ──────────────────────────────────────────────────────────────────────────
+   İKİ AŞAMALI DOĞRULAMA
+   ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Giriş ikinci aşaması: geçici bilet + doğrulayıcı kodu (ya da yedek kod).
+ *
+ * Hız sınırı giriş ucuyla aynı: 6 haneli kodu deneme yanılmayla bulmak
+ * 1 000 000'da 1 ama sınırsız deneme hakkı olsaydı mümkün olurdu.
+ */
+app.post('/api/login/2fa', girisSinirlayici, async (req, res) => {
+  try {
+    const { geciciBilet: bilet, kod } = req.body;
+    if (!bilet || !kod) return res.status(400).json({ error: 'Kod gerekli.' });
+
+    let veri;
+    try {
+      veri = jwt.verify(bilet, JWT_SECRET, { algorithms: ['HS256'] });
+    } catch (e) {
+      return res.status(401).json({ error: 'Doğrulama süresi doldu. Lütfen tekrar giriş yapın.' });
+    }
+    if (veri.asama !== '2fa') return res.status(401).json({ error: 'Geçersiz bilet.' });
+
+    const user = await prisma.user.findUnique({
+      where: { id: veri.userId },
+      include: { allergies: true, diseases: true },
+    });
+    if (!user || !user.totpEnabled) return res.status(401).json({ error: 'Geçersiz istek.' });
+
+    if (!await ikinciAsamaDogru(user, kod)) {
+      // Şifre DOĞRU girilmiş ama kod tutmuyor: şifrenin sızdığına işaret
+      // olabileceği için ayrı kaydediliyor.
+      guvenlikGunlugu('2FA kodu hatalı (şifre doğruydu)', req,
+        `hesap=${adresiMaskele(user.email)}`);
+      return res.status(401).json({ error: 'Kod hatalı.' });
+    }
+
+    const token = oturumBileti(user.id);
+    res.json({ token, user: kullaniciyiDondur(user) });
+  } catch (hata) {
+    sunucuHatasi(res, hata, '/api/login/2fa');
+  }
+});
+
+/**
+ * Kurulumu başlatır: gizli anahtar üretir ve QR kodunu döndürür.
+ * Anahtar kaydediliyor ama 2FA HENÜZ AÇILMIYOR — kullanıcı geçerli bir kod
+ * girerek kurulumun çalıştığını kanıtlamadan açılsaydı, yanlış kurulumda
+ * kendi hesabından kilitlenirdi.
+ */
+/* ──────────────────────────────────────────────────────────────────────────
+   ŞİFRE SIFIRLAMA
+   ──────────────────────────────────────────────────────────────────────────
+
+   AKIŞ: kullanıcı e-postasını yazar -> posta kutusuna tek kullanımlık bağlantı
+   gider -> bağlantıdan yeni şifre belirlenir.
+
+   ÜÇ TASARIM KARARI:
+
+   1. "BU E-POSTA KAYITLI DEĞİL" DENMİYOR. İstek ne olursa olsun aynı yanıt
+      dönüyor. Aksi hâlde bu uç nokta, bir adresin sistemde kayıtlı olup
+      olmadığını sorgulamaya yarardı; sağlık verisi tutan bir uygulamada
+      "şu kişi buraya kayıtlı" bilgisi başlı başına ifşadır.
+
+   2. 2FA AÇIKSA KOD DA İSTENİYOR. İstenmezse, posta kutusunu ele geçiren biri
+      şifreyi sıfırlayıp içeri girebilirdi — yani 2FA'nın koruması posta
+      kutusunun güvenliğine inerdi. Kod istenince saldırganın hem posta
+      kutusuna hem telefona erişmesi gerekiyor.
+
+   3. ŞİFRE DEĞİŞİNCE TÜM ESKİ OTURUMLAR KAPANIYOR (oturumlarGecersizAt).
+      Hesabı ele geçiren biri varsa şifre sıfırlamak onu gerçekten dışarı
+      atıyor; yoksa elindeki bilet süresi dolana kadar içeride kalırdı.
+*/
+
+// Bağlantının ömrü. Kısa: posta kutusu sonradan ele geçse eski bağlantı
+// işe yaramasın. Uzun değil ama kullanıcının postayı açmasına yeter.
+const SIFIRLAMA_SURESI_DK = 60;
+
+// Doğrulama bileti daha uzun yaşıyor: kullanıcı kayıt postasını ertesi gün
+// açabilir ve bu bilet tek başına hesaba erişim vermiyor, yalnızca adresin
+// sahipliğini kanıtlıyor.
+const DOGRULAMA_SURESI_SAAT = 24;
+
+/** Eski ve işe yaramaz biletleri siler. Birikmelerinin anlamı yok. */
+async function eskiBiletleriTemizle() {
+  const simdi = new Date();
+  try {
+    await Promise.all([
+      prisma.passwordReset.deleteMany({
+        where: { OR: [{ expiresAt: { lt: simdi } }, { usedAt: { not: null } }] },
+      }),
+      prisma.emailVerification.deleteMany({
+        where: { OR: [{ expiresAt: { lt: simdi } }, { usedAt: { not: null } }] },
+      }),
+    ]);
+  } catch (e) {
+    // Temizlik asıl işi engellememeli: başarısız olursa yalnızca günlüğe düşer.
+    console.error('[TEMİZLİK] Eski biletler silinemedi:', e.message);
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   SAKLAMA SÜRESİ DOLAN HESAPLARIN SİLİNMESİ
+   ──────────────────────────────────────────────────────────────────────────
+
+   Karar mantığı src/saklama.js içinde ve testlerle sabitlenmiş; burada
+   yalnızca uygulanıyor.
+
+   NİYE ZAMANLANMIŞ GÖREV DEĞİL: ücretsiz barındırma katmanlarında cron yok ve
+   sırf bunun için ayrı bir servis kurmak bu ölçekte gereksiz. Süpürme, zaten
+   çağrılan bir yoldan tetikleniyor ama GÜNDE EN FAZLA BİR KEZ çalışıyor —
+   aksi hâlde her girişte tüm kullanıcı tablosu taranırdı.
+
+   Hata durumunda sessizce geçiyor: temizlik, kullanıcının giriş yapmasını
+   engellememeli.
+*/
+let sonSupurme = 0;
+
+async function saklamaSuresiniUygula() {
+  if (Date.now() - sonSupurme < 24 * 60 * 60 * 1000) return;
+  sonSupurme = Date.now();
+  try {
+    const kullanicilar = await prisma.user.findMany({
+      select: {
+        id: true, email: true, createdAt: true,
+        sonGirisAt: true, silmeUyarisiAt: true,
+      },
+    });
+    const simdi = new Date();
+
+    for (const u of kullanicilar) {
+      /* eslint-disable no-await-in-loop */
+      if (saklama.silinmeliMi(u, simdi)) {
+        await prisma.$transaction([
+          prisma.passwordReset.deleteMany({ where: { userId: u.id } }),
+          prisma.emailVerification.deleteMany({ where: { userId: u.id } }),
+          prisma.labResult.deleteMany({ where: { userId: u.id } }),
+          prisma.diaryEntry.deleteMany({ where: { userId: u.id } }),
+          prisma.diaryDay.deleteMany({ where: { userId: u.id } }),
+          prisma.userAllergy.deleteMany({ where: { userId: u.id } }),
+          prisma.userDisease.deleteMany({ where: { userId: u.id } }),
+          prisma.user.delete({ where: { id: u.id } }),
+        ]);
+        // Kimlik günlüğe YAZILMIYOR, yalnızca maskeli adres.
+        console.warn(`[SAKLAMA] Hareketsiz hesap silindi: ${adresiMaskele(u.email)}`);
+      } else if (saklama.uyarilmaliMi(u, simdi)) {
+        await prisma.user.update({
+          where: { id: u.id },
+          data: { silmeUyarisiAt: simdi },
+        });
+        eposta.silmeUyarisiGonder(u.email, saklama.UYARI_GUN_ONCE)
+          .catch((h) => console.error('[POSTA] Silme uyarısı gönderilemedi:', h.message));
+      }
+    }
+  } catch (e) {
+    console.error('[SAKLAMA] Süpürme başarısız:', e.message);
+  }
+}
+
+/** Doğrulama bileti üretir, özetini saklar, bağlantıyı döndürür. */
+async function dogrulamaBiletiUret(userId) {
+  await prisma.emailVerification.updateMany({
+    where: { userId, usedAt: null },
+    data: { usedAt: new Date() },
+  });
+  const bilet = crypto.randomBytes(32).toString('hex');
+  await prisma.emailVerification.create({
+    data: {
+      tokenOzeti: biletOzeti(bilet),
+      userId,
+      expiresAt: new Date(Date.now() + DOGRULAMA_SURESI_SAAT * 60 * 60 * 1000),
+    },
+  });
+  return `${IZINLI_KOKEN}/eposta-dogrula?bilet=${bilet}`;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   E-POSTA DOĞRULAMA
+   ────────────────────────────────────────────────────────────────────────── */
+
+app.post('/api/eposta/dogrula', girisSinirlayici, async (req, res) => {
+  try {
+    const { bilet } = req.body;
+    if (!bilet) return res.status(400).json({ error: 'Doğrulama bileti gerekli.' });
+
+    const kayit = await prisma.emailVerification.findUnique({
+      where: { tokenOzeti: biletOzeti(String(bilet)) },
+      include: { user: { include: { allergies: true, diseases: true } } },
+    });
+
+    // Yok / kullanılmış / süresi dolmuş -> hepsi AYNI mesaj.
+    if (!kayit || kayit.usedAt || kayit.expiresAt < new Date()) {
+      guvenlikGunlugu('geçersiz doğrulama bileti', req,
+        kayit ? 'sebep=kullanılmış/süresi dolmuş' : 'sebep=bilet yok');
+      return res.status(400).json({
+        error: 'Bu doğrulama bağlantısı geçersiz ya da süresi dolmuş. '
+          + 'Giriş ekranından yeni bir bağlantı isteyebilirsiniz.',
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: kayit.userId },
+        data: { ePostaDogrulandiAt: new Date() },
+      }),
+      prisma.emailVerification.update({
+        where: { id: kayit.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    // DOĞRULAMADAN SONRA DOĞRUDAN İÇERİ ALINIYOR: kullanıcı az önce hem
+    // şifreyi belirlemiş hem adresin kendisine ait olduğunu kanıtlamış.
+    // Yeniden giriş istemek gereksiz bir adım olurdu.
+    //
+    // 2FA açıksa bu kısayol KAPALI: o kullanıcı ikinci aşamayı geçmeden
+    // içeri giremez, yoksa doğrulama bağlantısı 2FA'yı atlatan bir yol olurdu.
+    if (kayit.user.totpEnabled) {
+      return res.json({ dogrulandi: true, ikinciAsamaGerekli: true });
+    }
+    const token = oturumBileti(kayit.userId);
+    res.json({ dogrulandi: true, token, user: kullaniciyiDondur(kayit.user) });
+  } catch (hata) {
+    sunucuHatasi(res, hata, '/api/eposta/dogrula');
+  }
+});
+
+app.post('/api/eposta/tekrar-gonder', sifirlamaSinirlayici, async (req, res) => {
+  // Kayıt uç noktasıyla aynı mantık: adresin kayıtlı olup olmadığı,
+  // doğrulanmış olup olmadığı dışarıdan anlaşılmamalı.
+  const ayniYanit = {
+    mesaj: 'Adres kayıtlı ve henüz doğrulanmamışsa, yeni bir doğrulama '
+      + 'bağlantısı gönderildi.',
+  };
+  try {
+    const adres = String(req.body.email || '').trim().toLowerCase();
+    if (!adres) return res.status(400).json({ error: 'E-posta adresi gerekli.' });
+
+    const user = await prisma.user.findUnique({ where: { email: adres } });
+    if (user && !user.ePostaDogrulandiAt) {
+      const baglanti = await dogrulamaBiletiUret(user.id);
+      eposta.dogrulamaGonder(adres, baglanti, DOGRULAMA_SURESI_SAAT)
+        .catch((h) => console.error('[POSTA] Doğrulama gönderilemedi:', h.message));
+    }
+    await eskiBiletleriTemizle();
+    res.json(ayniYanit);
+  } catch (hata) {
+    console.error('[/api/eposta/tekrar-gonder]', hata);
+    res.json(ayniYanit);
+  }
+});
+
+app.post('/api/sifre/unuttum', sifirlamaSinirlayici, async (req, res) => {
+  // YANIT HER DURUMDA AYNI (bkz. yukarıdaki 1. karar).
+  const ayniYanit = {
+    mesaj: 'Eğer bu e-posta adresi kayıtlıysa, şifre sıfırlama bağlantısı gönderildi. '
+      + 'Posta kutunuzu kontrol edin.',
+  };
+  try {
+    const adres = String(req.body.email || '').trim().toLowerCase();
+    if (!adres) return res.status(400).json({ error: 'E-posta adresi gerekli.' });
+
+    const user = await prisma.user.findUnique({ where: { email: adres } });
+
+    if (user) {
+      // Önceki kullanılmamış biletler geçersiz kılınıyor: aynı anda birden
+      // fazla geçerli bağlantı dolaşmasın.
+      await prisma.passwordReset.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+
+      const bilet = crypto.randomBytes(32).toString('hex');
+      await prisma.passwordReset.create({
+        data: {
+          tokenOzeti: biletOzeti(bilet),   // biletin kendisi SAKLANMIYOR
+          userId: user.id,
+          expiresAt: new Date(Date.now() + SIFIRLAMA_SURESI_DK * 60 * 1000),
+        },
+      });
+
+      const baglanti = `${IZINLI_KOKEN}/sifre-yenile?bilet=${bilet}`;
+      // GÖNDERİM BEKLENMİYOR. İki sebep: (a) SMTP yavaş, kullanıcıyı
+      // bekletmenin anlamı yok; (b) kayıtlı adreste posta gönderimi sürer,
+      // kayıtsızda sürmezdi — yanıt süresi adresin kayıtlı olup olmadığını
+      // ele verirdi. Hata yalnızca günlüğe yazılıyor.
+      eposta.sifirlamaGonder(adres, baglanti, SIFIRLAMA_SURESI_DK)
+        .catch((h) => console.error('[POSTA] Gönderim başarısız:', h.message));
+    }
+
+    // Biriken işe yaramaz biletleri burada temizliyoruz: ayrı bir zamanlanmış
+    // görev kurmak bu ölçekte gereksiz, ve bu uç nokta zaten seyrek çağrılıyor.
+    await eskiBiletleriTemizle();
+    res.json(ayniYanit);
+  } catch (hata) {
+    // Burada da ayrıntı sızdırmıyoruz; hata sunucu günlüğüne gidiyor.
+    console.error('[/api/sifre/unuttum]', hata);
+    res.json(ayniYanit);
+  }
+});
+
+app.post('/api/sifre/yenile', girisSinirlayici, async (req, res) => {
+  try {
+    const { bilet, password, kod } = req.body;
+    if (!bilet) return res.status(400).json({ error: 'Sıfırlama bileti gerekli.' });
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı.' });
+    }
+
+    const kayit = await prisma.passwordReset.findUnique({
+      where: { tokenOzeti: biletOzeti(String(bilet)) },
+      include: { user: true },
+    });
+
+    // Yok / kullanılmış / süresi dolmuş -> hepsi AYNI mesaj. Hangisi olduğunu
+    // söylemek, geçerli bilet aramaya yarayacak bilgi verirdi.
+    const gecersiz = !kayit || kayit.usedAt || kayit.expiresAt < new Date();
+    if (gecersiz) {
+      guvenlikGunlugu('geçersiz şifre sıfırlama bileti', req,
+        kayit ? 'sebep=kullanılmış/süresi dolmuş' : 'sebep=bilet yok');
+      return res.status(400).json({
+        error: 'Bu sıfırlama bağlantısı geçersiz ya da süresi dolmuş. Yeniden talep edin.',
+      });
+    }
+
+    // 2FA açıksa kod şart (bkz. yukarıdaki 2. karar). Kod gelmediyse hata
+    // değil, arayüze "kodu da sor" diyoruz.
+    if (kayit.user.totpEnabled) {
+      if (!kod) return res.status(200).json({ ikinciAsama: true });
+      if (!await ikinciAsamaDogru(kayit.user, kod)) {
+        return res.status(401).json({ error: 'Doğrulama kodu hatalı.' });
+      }
+    }
+
+    const yeniOzet = await bcrypt.hash(String(password), 10);
+    // Tek işlem: şifre değişiyor, bilet kullanılmış damgası yiyor, eski
+    // oturumlar geçersiz kılınıyor. Biri olup biri olmazsa tutarsız kalırdı.
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: kayit.userId },
+        data: {
+          passwordHash: yeniOzet,
+          oturumlarGecersizAt: new Date(),
+          // Sıfırlama bağlantısını açabilen kişi o posta kutusuna erişiyor
+          // demektir; adresin sahipliği zaten kanıtlanmış oluyor. Ayrıca
+          // doğrulama istemek kullanıcıyı boşuna bir adıma sokardı.
+          ePostaDogrulandiAt: new Date(),
+          // Kilidi de açıyoruz: şifresini unutup kilitlenen kullanıcı,
+          // şifresini yenileyince beklemek zorunda kalmamalı.
+          basarisizGiris: 0,
+          kilitBitisi: null,
+        },
+      }),
+      prisma.passwordReset.update({
+        where: { id: kayit.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    res.json({ mesaj: 'Şifreniz güncellendi. Yeni şifrenizle giriş yapabilirsiniz.' });
+  } catch (hata) {
+    sunucuHatasi(res, hata, '/api/sifre/yenile');
+  }
+});
+
+app.post('/api/2fa/baslat', girisGerekli, async (req, res) => {
+  try {
+    if (req.kullanici.totpEnabled) {
+      return res.status(400).json({ error: 'İki aşamalı doğrulama zaten açık.' });
+    }
+    const secret = totp.yeniAnahtar();
+    await prisma.user.update({
+      where: { id: req.kullanici.id },
+      data: { totpSecret: totp.sifrele(secret, TOTP_TEMEL) },   // diskte şifreli
+    });
+
+    // otpauth:// adresi doğrulayıcı uygulamaların anladığı standart biçim.
+    const adres = totp.kurulumAdresi(req.kullanici.email, secret);
+    const qr = await QRCode.toDataURL(adres, { margin: 1, width: 240 });
+
+    // Anahtar ayrıca metin olarak da dönüyor: kamerası çalışmayan kullanıcı
+    // elle girebilsin diye.
+    res.json({ qr, anahtar: secret });
+  } catch (hata) {
+    sunucuHatasi(res, hata, '/api/2fa/baslat');
+  }
+});
+
+/** Kurulumu tamamlar: kod doğruysa 2FA açılır ve yedek kodlar BİR KEZ gösterilir. */
+app.post('/api/2fa/dogrula', girisGerekli, async (req, res) => {
+  try {
+    const { kod } = req.body;
+    if (!req.kullanici.totpSecret) {
+      return res.status(400).json({ error: 'Önce kurulumu başlatın.' });
+    }
+    const kurulumAnahtari = totp.coz(req.kullanici.totpSecret, TOTP_TEMEL);
+    if (!totp.gecerliMi(String(kod || '').replace(/\s/g, ''), kurulumAnahtari)) {
+      return res.status(400).json({ error: 'Kod hatalı. Telefonunuzdaki güncel kodu girin.' });
+    }
+
+    const kodlar = yedekKodUret();
+    const ozetler = await Promise.all(kodlar.map((k) => bcrypt.hash(k, 10)));
+    await prisma.user.update({
+      where: { id: req.kullanici.id },
+      data: { totpEnabled: true, totpYedekKodlari: ozetler },
+    });
+
+    // Yedek kodlar yalnızca BURADA düz metin olarak görünüyor; veritabanında
+    // özetleri duruyor, yani sonradan bir daha gösterilemezler.
+    res.json({ acildi: true, yedekKodlar: kodlar });
+  } catch (hata) {
+    sunucuHatasi(res, hata, '/api/2fa/dogrula');
+  }
+});
+
+/** Kapatır. Şifre isteniyor: biletini ele geçiren biri korumayı kaldıramasın. */
+app.post('/api/2fa/kapat', girisGerekli, async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    const dogruMu = password ? await bcrypt.compare(password, req.kullanici.passwordHash) : false;
+    if (!dogruMu) return res.status(401).json({ error: 'Şifrenizi doğru girmeniz gerekiyor.' });
+
+    await prisma.user.update({
+      where: { id: req.kullanici.id },
+      data: { totpEnabled: false, totpSecret: null, totpYedekKodlari: [] },
+    });
+    res.json({ kapatildi: true });
+  } catch (hata) {
+    sunucuHatasi(res, hata, '/api/2fa/kapat');
   }
 });
 
@@ -278,11 +1084,15 @@ app.put('/api/me', girisGerekli, async (req, res) => {
     // Alerji/hastalık listeleri: eskisini silip yenisini yazıyoruz (en basit yol)
     if (Array.isArray(allergies)) {
       await prisma.userAllergy.deleteMany({ where: { userId: id } });
-      await prisma.userAllergy.createMany({ data: allergies.map((a) => ({ name: a, userId: id })) });
+      await prisma.userAllergy.createMany({
+        data: allergies.map((a) => ({ name: kripto.sifrele(a), userId: id })),
+      });
     }
     if (Array.isArray(diseases)) {
       await prisma.userDisease.deleteMany({ where: { userId: id } });
-      await prisma.userDisease.createMany({ data: diseases.map((d) => ({ name: d, userId: id })) });
+      await prisma.userDisease.createMany({
+        data: diseases.map((d) => ({ name: kripto.sifrele(d), userId: id })),
+      });
     }
     const user = await prisma.user.update({
       where: { id },
@@ -301,7 +1111,7 @@ app.put('/api/me', girisGerekli, async (req, res) => {
     });
     res.json(kullaniciyiDondur(user));
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/me');
   }
 });
 
@@ -354,7 +1164,7 @@ app.post('/api/onay', girisGerekli, async (req, res) => {
     });
     res.json({ user: kullaniciyiDondur(user) });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/onay');
   }
 });
 
@@ -369,6 +1179,104 @@ app.post('/api/onay', girisGerekli, async (req, res) => {
  * siliniyor. Hepsi TEK transaction içinde — yarıda kalıp "kullanıcı silindi
  * ama tahlilleri durdu" durumu oluşamaz.
  */
+/* ──────────────────────────────────────────────────────────────────────────
+   VERİLERİMİ İNDİR
+   ──────────────────────────────────────────────────────────────────────────
+
+   DAYANAĞI: KVKK m.11, ilgili kişinin "işlenip işlenmediğini öğrenme" ve
+   "işlenmişse buna ilişkin bilgi talep etme" hakkı; GDPR m.15 (erişim hakkı) ve
+   m.20 (veri taşınabilirliği).
+
+   GDPR m.20 verinin "yapılandırılmış, yaygın olarak kullanılan ve makine
+   tarafından okunabilir" bir biçimde verilmesini istiyor — JSON bu üç şartı
+   karşılıyor.
+
+   HESABI SİLMEKTEN FARKI VE NİYE İKİSİ BİRDEN GEREKLİ: silme hakkı veriyi
+   ortadan kaldırıyor, erişim hakkı ne tutulduğunu gösteriyor. Yalnızca silme
+   sunulsa kullanıcı "hakkımda ne var" sorusunu ancak her şeyi kaybederek
+   cevaplayabilirdi.
+
+   VERİ ÇÖZÜLEREK VERİLİYOR: dosya kullanıcının kendi verisi, kendi talebiyle,
+   kimliği doğrulanmış oturumda iniyor. Şifreli hâliyle vermek hakkı kâğıt
+   üzerinde karşılayıp işe yaramaz kılmak olurdu.
+
+   ŞİFRE ÖZETİ VE 2FA ANAHTARI DAHİL EDİLMİYOR: ikisi de kullanıcı hakkında
+   bilgi değil, kimlik doğrulama sırrı. Dosyaya konmaları, dosya başkasının
+   eline geçtiğinde hesabı ele geçirmeye yarar.
+*/
+app.get('/api/me/verilerim', girisGerekli, async (req, res) => {
+  try {
+    const id = req.kullanici.id;
+    const [tahliller, kalemler, gunler] = await Promise.all([
+      prisma.labResult.findMany({ where: { userId: id }, orderBy: { testDate: 'desc' } }),
+      prisma.diaryEntry.findMany({ where: { userId: id }, orderBy: { date: 'desc' } }),
+      prisma.diaryDay.findMany({ where: { userId: id }, orderBy: { date: 'desc' } }),
+    ]);
+
+    const hazirKalemler = await kalemleriHazirla(kalemler);
+
+    const paket = {
+      aciklama: 'Besin Risk Analiz Sistemi — kişisel veri dökümü. Bu dosya '
+        + 'hesabınızda saklanan tüm kişisel verileri içerir (KVKK m.11, '
+        + 'GDPR m.15 ve m.20).',
+      olusturulmaZamani: new Date().toISOString(),
+      iceriginDisindaKalanlar: [
+        'Şifrenizin bcrypt özeti — kimlik doğrulama sırrıdır, kişisel bilgi değildir.',
+        'İki aşamalı doğrulama gizli anahtarı ve yedek kodlarınız — aynı sebeple.',
+        'Besin değerleri tablosu — TürKomp kaynaklı genel veridir, size ait değildir.',
+      ],
+      hesap: {
+        ad: req.kullanici.name,
+        soyad: req.kullanici.surname,
+        ePosta: req.kullanici.email,
+        cinsiyet: req.kullanici.gender,
+        diyetTercihi: req.kullanici.diet,
+        gunlukKaloriHedefi: req.kullanici.kcalGoal,
+        gunlukSuHedefiLitre: req.kullanici.waterGoalL,
+        kayitTarihi: req.kullanici.createdAt,
+        ikiAsamaliDogrulamaAcikMi: req.kullanici.totpEnabled,
+      },
+      kvkkOnaylari: {
+        aydinlatmaOkunduAt: req.kullanici.aydinlatmaOkunduAt,
+        acikRizaAt: req.kullanici.acikRizaAt,
+        onaylananMetinSurumu: req.kullanici.rizaSurumu,
+      },
+      hastaliklar: cozVeDenetle(req.kullanici.diseases, 'hastalık', id),
+      alerjiler: cozVeDenetle(req.kullanici.allergies, 'alerji', id),
+      tahlilSonuclari: tahliller.map(tahliliCoz).map((t) => ({
+        tarih: t.testDate,
+        test: t.testName,
+        deger: t.value,
+        birim: t.unit,
+        referansAlt: t.refLow,
+        referansUst: t.refHigh,
+        metinDeger: t.textValue,
+        raporYorumu: t.pdfYorumu,
+        raporAraligi: t.pdfAralik,
+      })),
+      gunlukTakipKalemleri: hazirKalemler.map((k) => ({
+        tarih: k.date,
+        ogun: k.mealType,
+        ad: k.food ? k.food.name : (k.label || null),
+        besinKaydiBulunamadi: k.besinKayipMi || undefined,
+        gram: k.amount,
+        kalori: k.kcal,
+      })),
+      gunlukTakipGunleri: gunler.map((g) => {
+        const acik = gunKaydiniCoz(g);
+        return { tarih: g.date, yakilanKalori: acik.burnedKcal, suLitre: acik.waterL };
+      }),
+    };
+
+    const dosyaAdi = `besin-risk-analiz-verilerim-${new Date().toISOString().slice(0, 10)}.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${dosyaAdi}"`);
+    res.send(JSON.stringify(paket, null, 2));
+  } catch (hata) {
+    sunucuHatasi(res, hata, '/api/me/verilerim');
+  }
+});
+
 app.delete('/api/me', girisGerekli, async (req, res) => {
   try {
     const { password } = req.body || {};
@@ -381,6 +1289,11 @@ app.delete('/api/me', girisGerekli, async (req, res) => {
 
     const id = req.kullanici.id;
     await prisma.$transaction([
+      // Veri tabanı basamağında onDelete: Cascade zaten var; buraya açıkça
+      // yazılıyor çünkü silinmesi gereken verinin listesi koddan okunabilir
+      // olmalı (KVKK m.7 / GDPR m.17 — silme yükümlülüğünün kapsamı).
+      prisma.passwordReset.deleteMany({ where: { userId: id } }),
+      prisma.emailVerification.deleteMany({ where: { userId: id } }),
       prisma.labResult.deleteMany({ where: { userId: id } }),
       prisma.diaryEntry.deleteMany({ where: { userId: id } }),
       prisma.diaryDay.deleteMany({ where: { userId: id } }),
@@ -391,7 +1304,7 @@ app.delete('/api/me', girisGerekli, async (req, res) => {
 
     res.json({ silindi: true });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/me');
   }
 });
 
@@ -423,7 +1336,7 @@ app.get('/api/foods', async (req, res) => {
 
     res.json({ count: sonuc.length, profilKullanildi: Boolean(req.kullanici), foods: sonuc });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/foods');
   }
 });
 
@@ -442,7 +1355,7 @@ app.get('/api/foods/:id', async (req, res) => {
       tahlil: await tahlilBulgulariGetir(besin, req.kullanici),
     });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/foods/:id');
   }
 });
 
@@ -463,7 +1376,7 @@ app.get('/api/meta', async (_req, res) => {
       diets: Object.keys(DIYETLER),
     });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/meta');
   }
 });
 
@@ -495,30 +1408,21 @@ function gunuYaz(d) {
   return new Date(d).toISOString().slice(0, 10);
 }
 
-/** Bir kalemi arayüzün beklediği şekle çevirir. */
-function kalemiDondur(k) {
-  // ADET: kaç porsiyon yendiği. Veritabanında GRAM saklıyoruz (porsiyon tanımı
-  // ileride düzeltilirse yenen miktar değişmesin diye), adet gösterim için
-  // gramdan geri hesaplanıyor.
-  let adet = null;
-  if (k.food && k.food.portionGrams > 0 && k.amount) {
-    adet = Math.round((k.amount / k.food.portionGrams) * 100) / 100;
-  }
-  return {
-    id: k.id,
-    mealType: k.mealType,
-    // KALORİ VERİTABANINDA YUVARLANMADAN DURUYOR, burada yuvarlanıyor.
-    // Sebebi: adet değiştikçe kalori oranlanıyor. Her adımda yuvarlasaydık
-    // 1 -> 0,5 -> 1 gidip gelen bir kalem her turda birkaç kcal kayardı.
-    kcal: Math.round(k.kcal),
-    // Besin seçilerek eklendiyse adı besinden, serbest girişte label'dan gelir.
-    ad: k.food ? k.food.name : (k.label || 'Belirtilmemiş'),
-    foodId: k.foodId,
-    amount: k.amount,
-    adet,
-    porsiyonAdi: k.food ? k.food.portionName : null,
-    icon: k.food ? k.food.icon : null,
-  };
+/**
+ * Şifreli kalem satırlarını arayüze hazır hâle getirir.
+ *
+ * ÜÇ ADIM: çöz -> besin kimliklerini topla -> besinleri TEK sorguda getir.
+ * Besin kimliği şifreli olduğu için Prisma `include: { food: true }`
+ * yapamıyor; bağ uygulama tarafında kuruluyor. Tek tek sorgulamak bir günde
+ * 10 kalem için 10 sorgu demek olurdu (N+1), bu yüzden toplu getiriliyor.
+ */
+async function kalemleriHazirla(satirlar) {
+  const cozulmus = satirlar.map(kalemiCoz);
+  const kimlikler = gunluk.besinKimlikleri(cozulmus);
+  if (!kimlikler.length) return gunluk.besinleriBagla(cozulmus, new Map());
+
+  const besinler = await prisma.food.findMany({ where: { id: { in: kimlikler } } });
+  return gunluk.besinleriBagla(cozulmus, new Map(besinler.map((b) => [b.id, b])));
 }
 
 // --- Bir günün tamamı ------------------------------------------------------
@@ -530,7 +1434,6 @@ app.get('/api/diary/:gun', girisGerekli, async (req, res) => {
     const [kalemler, gunKaydi] = await Promise.all([
       prisma.diaryEntry.findMany({
         where: { userId: req.kullanici.id, date: gun },
-        include: { food: true },
         orderBy: { id: 'asc' },
       }),
       prisma.diaryDay.findUnique({
@@ -538,23 +1441,25 @@ app.get('/api/diary/:gun', girisGerekli, async (req, res) => {
       }),
     ]);
 
-    const alinan = kalemler.reduce((t, k) => t + k.kcal, 0);
-    const yakilan = gunKaydi ? gunKaydi.burnedKcal : 0;
+    const cozulmus = await kalemleriHazirla(kalemler);
+    const gunDegerleri = gunKaydiniCoz(gunKaydi);
+    const alinan = cozulmus.reduce((t, k) => t + k.kcal, 0);
+    const yakilan = gunDegerleri.burnedKcal;
 
     res.json({
       gun: req.params.gun,
-      kalemler: kalemler.map(kalemiDondur),
+      kalemler: cozulmus.map(kalemiDondur),
       alinanKcal: Math.round(alinan),
       yakilanKcal: Math.round(yakilan),
       netKcal: Math.round(alinan - yakilan),
-      suL: gunKaydi ? gunKaydi.waterL : 0,
+      suL: gunDegerleri.waterL,
       hedefler: {
         kcal: req.kullanici.kcalGoal,
         suL: req.kullanici.waterGoalL,
       },
     });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/diary/:gun');
   }
 });
 
@@ -587,30 +1492,31 @@ app.post('/api/diary/:gun/kalem', girisGerekli, async (req, res) => {
         gram = besin.portionGrams;
       }
       kayit = {
-        foodId: besin.id,
-        amount: gram,
+        foodRef: kripto.sayiSifrele(besin.id),
+        amount: kripto.sayiSifrele(gram),
         label: null,
-        kcal: (besin.kcal * gram) / 100,   // yuvarlanmıyor, bkz. kalemiDondur
+        // yuvarlanmıyor, bkz. kalemiDondur
+        kcal: kripto.sayiSifrele((besin.kcal * gram) / 100),
       };
     } else {
       // SERBEST GİRİŞ
       const sayi = Number(kcal);
       if (!(sayi > 0)) return res.status(400).json({ error: 'Kalori sıfırdan büyük olmalı.' });
       kayit = {
-        foodId: null,
+        foodRef: null,
         amount: null,
-        label: (label || '').trim() || 'Serbest giriş',
-        kcal: Math.round(sayi),
+        label: kripto.sifrele((label || '').trim() || 'Serbest giriş'),
+        kcal: kripto.sayiSifrele(Math.round(sayi)),
       };
     }
 
     const olusan = await prisma.diaryEntry.create({
       data: { ...kayit, mealType, date: gun, userId: req.kullanici.id },
-      include: { food: true },
     });
-    res.status(201).json(kalemiDondur(olusan));
+    const [hazir] = await kalemleriHazirla([olusan]);
+    res.status(201).json(kalemiDondur(hazir));
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/diary/:gun/kalem');
   }
 });
 
@@ -630,27 +1536,30 @@ app.put('/api/diary/kalem/:id', girisGerekli, async (req, res) => {
 
     const kalem = await prisma.diaryEntry.findFirst({
       where: { id, userId: req.kullanici.id },
-      include: { food: true },
     });
     if (!kalem) return res.status(404).json({ error: 'Kayıt bulunamadı.' });
-    if (!kalem.food || !kalem.amount) {
+    const [acik] = await kalemleriHazirla([kalem]);
+    if (!acik.food || !acik.amount) {
+      // Besin kaydı bulunamadıysa da buraya düşüyor: porsiyon gramını
+      // bilmeden adet oranlanamaz.
       return res.status(400).json({ error: 'Serbest girişlerde adet değiştirilemez; silip yeniden ekleyin.' });
     }
 
-    const eskiAdet = kalem.amount / kalem.food.portionGrams;
+    const eskiAdet = acik.amount / acik.food.portionGrams;
     const oran = yeniAdet / eskiAdet;
 
     const guncel = await prisma.diaryEntry.update({
       where: { id },
       data: {
-        amount: kalem.food.portionGrams * yeniAdet,
-        kcal: kalem.kcal * oran,   // yuvarlanmıyor, bkz. kalemiDondur
+        amount: kripto.sayiSifrele(acik.food.portionGrams * yeniAdet),
+        // yuvarlanmıyor, bkz. kalemiDondur
+        kcal: kripto.sayiSifrele(acik.kcal * oran),
       },
-      include: { food: true },
     });
-    res.json(kalemiDondur(guncel));
+    const [yeni] = await kalemleriHazirla([guncel]);
+    res.json(kalemiDondur(yeni));
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/diary/kalem/:id');
   }
 });
 
@@ -665,7 +1574,7 @@ app.delete('/api/diary/kalem/:id', girisGerekli, async (req, res) => {
     if (sonuc.count === 0) return res.status(404).json({ error: 'Kayıt bulunamadı.' });
     res.json({ silindi: id });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/diary/kalem/:id');
   }
 });
 
@@ -677,17 +1586,22 @@ app.put('/api/diary/:gun', girisGerekli, async (req, res) => {
 
     const { burnedKcal, waterL } = req.body;
     const veri = {};
-    if (burnedKcal !== undefined) veri.burnedKcal = Math.max(0, Number(burnedKcal) || 0);
-    if (waterL !== undefined) veri.waterL = Math.max(0, Number(waterL) || 0);
+    if (burnedKcal !== undefined) {
+      veri.burnedKcal = kripto.sayiSifrele(Math.max(0, Number(burnedKcal) || 0));
+    }
+    if (waterL !== undefined) {
+      veri.waterL = kripto.sayiSifrele(Math.max(0, Number(waterL) || 0));
+    }
 
     const kayit = await prisma.diaryDay.upsert({
       where: { userId_date: { userId: req.kullanici.id, date: gun } },
       update: veri,
       create: { userId: req.kullanici.id, date: gun, ...veri },
     });
-    res.json({ gun: req.params.gun, yakilanKcal: kayit.burnedKcal, suL: kayit.waterL });
+    const acikGun = gunKaydiniCoz(kayit);
+    res.json({ gun: req.params.gun, yakilanKcal: acikGun.burnedKcal, suL: acikGun.waterL });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/diary/:gun');
   }
 });
 
@@ -721,11 +1635,12 @@ app.get('/api/diary/ay/:yilAy', girisGerekli, async (req, res) => {
       }
       return harita.get(anahtar);
     };
-    kalemler.forEach((k) => { al(k.date).alinanKcal += k.kcal; });
+    kalemler.forEach((k) => { al(k.date).alinanKcal += (kripto.sayiCoz(k.kcal) || 0); });
     gunler.forEach((g) => {
       const o = al(g.date);
-      o.yakilanKcal = g.burnedKcal;
-      o.suL = g.waterL;
+      const acik = gunKaydiniCoz(g);
+      o.yakilanKcal = acik.burnedKcal;
+      o.suL = acik.waterL;
     });
 
     res.json({
@@ -734,7 +1649,7 @@ app.get('/api/diary/ay/:yilAy', girisGerekli, async (req, res) => {
       hedefler: { kcal: req.kullanici.kcalGoal, suL: req.kullanici.waterGoalL },
     });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/diary/ay/:yilAy');
   }
 });
 
@@ -754,7 +1669,25 @@ app.get('/api/diary/ay/:yilAy', girisGerekli, async (req, res) => {
 const { tahlilAyristir, pdfYorumu } = require('./tahlil_ayristir');
 
 // PDF ham gövde olarak geliyor (base64 şişirmesi ve ek paket olmasın diye).
-const pdfGovdesi = express.raw({ type: 'application/pdf', limit: '15mb' });
+// BOYUT SINIRI 3 MB.
+//
+// GEÇMİŞİ: 15 MB'tı, savunulacak gerekçesi yoktu. Önce 2 MB'a çekildi, sonra
+// 3 MB'a çıkarıldı.
+//
+// NİYE 2 DEĞİL 3: elimizdeki e-Nabız raporları 0,17-0,18 MB, ama bu ölçü tek
+// bir rapor biçiminden geliyor. Yıllara yayılmış çok sayıda test içeren bir
+// rapor, gömülü yazı tipi taşıyan bir çıktı ya da başka bir laboratuvarın
+// biçimi daha büyük olabilir. YANLIŞ TARAFA DÜŞMENİN BEDELİ ASİMETRİK:
+// sınır fazla darsa meşru raporu olan kullanıcı dosyasını hiç yükleyemez
+// (ve nedenini anlamaz); sınır biraz genişse kaybedilen şey yok, çünkü asıl
+// korumalar boyut değil (aşağıya bakın). Bu yüzden pay bırakıldı.
+//
+// BOYUT ASIL KORUMA DEĞİL. Dosya boyutu ayrıştırmanın maliyetini söylemiyor:
+// sıkıştırılmış küçük bir PDF binlerce sayfa açabilir. Gerçek korumalar
+// src/tahlil_ayristir.js içinde: SAYFA SINIRI (40) ve ZAMAN AŞIMI (15 sn).
+// Boyut sınırı yalnızca ağı ve belleği boşa harcamamak için kaba bir süzgeç.
+const PDF_SINIRI = '3mb';
+const pdfGovdesi = express.raw({ type: 'application/pdf', limit: PDF_SINIRI });
 
 /** "03.06.2026" -> Date (UTC gece yarısı) */
 function tarihiCoz(metin) {
@@ -764,7 +1697,7 @@ function tarihiCoz(metin) {
 }
 
 // --- 1. aşama: PDF'i oku, KAYDETME ----------------------------------------
-app.post('/api/lab/oku', girisGerekli, pdfGovdesi, async (req, res) => {
+app.post('/api/lab/oku', girisGerekli, pdfSinirlayici, pdfGovdesi, async (req, res) => {
   try {
     if (!req.body || !req.body.length) {
       return res.status(400).json({ error: 'PDF gövdesi boş. Content-Type: application/pdf olmalı.' });
@@ -787,7 +1720,22 @@ app.post('/api/lab/oku', girisGerekli, pdfGovdesi, async (req, res) => {
     });
     res.json({ tarih: sonuc.tarih, testler, uyarilar: sonuc.uyarilar });
   } catch (hata) {
-    res.status(400).json({ error: `PDF okunamadı: ${hata.message}` });
+    // pdfjs'in iç hata metni kullanıcıya bir şey anlatmıyor, ama dosya
+    // yapısı hakkında bilgi sızdırabiliyor. Günlüğe yazılıyor, dışarı genel
+    // mesaj gidiyor.
+    console.error('[HATA] /api/lab/oku:', hata);
+    // Sayfa sınırı ve zaman aşımı kullanıcının DÜZELTEBİLECEĞİ durumlar;
+    // genel "okunamadı" mesajına gömülürse kullanıcı neyi deneyeceğini
+    // bilemez. Bu iki mesaj dosya yapısı hakkında bilgi sızdırmıyor.
+    const m = String(hata && hata.message);
+    if (m.includes('sayfa okunabiliyor') || m.includes('zaman aşımına')) {
+      return res.status(400).json({
+        error: `${m} Yalnızca tahlil sonuçlarını içeren sayfaları ayırıp yüklemeyi deneyin.`,
+      });
+    }
+    res.status(400).json({
+      error: 'PDF okunamadı. Dosyanın e-Nabız tahlil raporu olduğundan ve bozuk olmadığından emin olun.',
+    });
   }
 });
 
@@ -806,23 +1754,27 @@ app.post('/api/lab', girisGerekli, async (req, res) => {
       data: testler.map((t) => ({
         userId: req.kullanici.id,
         testDate,
-        testName: String(t.testName || '').slice(0, 120),
-        value: t.value === null || t.value === undefined ? null : Number(t.value),
-        valueOp: t.valueOp || null,
-        textValue: t.textValue || null,
-        unit: t.unit || null,
-        refLow: t.refLow === null || t.refLow === undefined ? null : Number(t.refLow),
-        refHigh: t.refHigh === null || t.refHigh === undefined ? null : Number(t.refHigh),
-        pdfYorumu: t.pdfYorumu || null,
-        pdfAralik: t.pdfAralik || null,
+        // Hepsi şifreli yazılıyor (KVKK 2018/10). userId ve testDate hariç —
+        // sorgular onların üzerinden yürüyor.
+        testName: kripto.sifrele(String(t.testName || '').slice(0, 120)),
+        value: kripto.sayiSifrele(t.value),
+        unit: kripto.sifrele(t.unit || null),
+        valueOp: kripto.sifrele(t.valueOp || null),
+        textValue: kripto.sifrele(t.textValue || null),
+        refLow: kripto.sayiSifrele(t.refLow),
+        refHigh: kripto.sayiSifrele(t.refHigh),
+        pdfYorumu: kripto.sifrele(t.pdfYorumu || null),
+        pdfAralik: kripto.sifrele(t.pdfAralik || null),
       })),
     });
-    const kayitli = await prisma.labResult.findMany({
-      where: { userId: req.kullanici.id, testDate }, orderBy: { testName: 'asc' },
-    });
+    // SIRALAMA ARTIK BELLEKTE: testName şifreli olduğu için veritabanı
+    // sıralaması anlamsız sonuç verirdi (şifreli metne göre alfabetik).
+    const kayitli = (await prisma.labResult.findMany({
+      where: { userId: req.kullanici.id, testDate },
+    })).map(tahliliCoz).sort((a, b) => (a.testName || '').localeCompare(b.testName || '', 'tr'));
     res.status(201).json({ tarih, kaydedilen: kayitli.length, testler: kayitli });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/lab');
   }
 });
 
@@ -886,10 +1838,10 @@ const TAHLIL_BESIN_ESLESMESI = [
 async function tahlilBulgulariGetir(besin, kullanici) {
   if (!kullanici) return null;
 
-  const hepsi = await prisma.labResult.findMany({
+  const hepsi = (await prisma.labResult.findMany({
     where: { userId: kullanici.id },
-    orderBy: { testDate: 'desc' },
-  });
+    orderBy: { testDate: 'desc' },   // tarih şifresiz, sıralanabiliyor
+  })).map(tahliliCoz);
   if (!hepsi.length) return null;
 
   // Yalnızca EN SON tahlil: eski bir sonuca göre bilgi vermek yanıltıcı olur.
@@ -944,10 +1896,10 @@ async function tahlilBulgulariGetir(besin, kullanici) {
 
 app.get('/api/lab/oneriler', girisGerekli, async (req, res) => {
   try {
-    const hepsi = await prisma.labResult.findMany({
+    const hepsi = (await prisma.labResult.findMany({
       where: { userId: req.kullanici.id },
       orderBy: { testDate: 'desc' },
-    });
+    })).map(tahliliCoz);
     if (!hepsi.length) return res.json({ tarih: null, oneriler: [] });
 
     // Yalnızca EN SON tahlil: eski bir sonuca göre öneri vermek yanıltıcı olur.
@@ -1009,17 +1961,21 @@ app.get('/api/lab/oneriler', girisGerekli, async (req, res) => {
         .map((t) => t.testName),
     });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/lab/oneriler');
   }
 });
 
 // --- Kayıtlı tahliller -----------------------------------------------------
 app.get('/api/lab', girisGerekli, async (req, res) => {
   try {
-    const hepsi = await prisma.labResult.findMany({
+    // testName şifreli olduğu için ona göre veritabanı sıralaması anlamsız;
+    // çözdükten sonra bellekte sıralıyoruz.
+    const hepsi = (await prisma.labResult.findMany({
       where: { userId: req.kullanici.id },
-      orderBy: [{ testDate: 'desc' }, { testName: 'asc' }],
-    });
+      orderBy: { testDate: 'desc' },
+    })).map(tahliliCoz)
+      .sort((a, b) => (b.testDate - a.testDate)
+        || (a.testName || '').localeCompare(b.testName || '', 'tr'));
     // Tarihe göre grupla: arayüz "03.06.2026 tahlili" diye gösteriyor
     const gruplar = new Map();
     hepsi.forEach((t) => {
@@ -1037,7 +1993,7 @@ app.get('/api/lab', girisGerekli, async (req, res) => {
       })),
     });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/lab');
   }
 });
 
@@ -1051,7 +2007,7 @@ app.delete('/api/lab/:tarih', girisGerekli, async (req, res) => {
     });
     res.json({ silinen: sonuc.count });
   } catch (hata) {
-    res.status(500).json({ error: hata.message });
+    sunucuHatasi(res, hata, '/api/lab/:tarih');
   }
 });
 
@@ -1063,6 +2019,37 @@ app.get('/', (_req, res) => {
   });
 });
 
+// --- Hata ara katmanı ------------------------------------------------------
+// EN SONDA OLMALI: Express hata ara katmanlarını tanımlanma sırasına göre
+// çalıştırıyor, dört parametreli olduğu için hata yakalayıcı sayılıyor.
+//
+// Niye var: boyut sınırı aşıldığında hatayı body-parser uç noktaya girmeden
+// fırlatıyor, yani uç noktadaki try/catch bunu hiç görmüyor. Karşılamazsak
+// Express öntanımlı HTML sayfası dönüyor; arayüz onu JSON sanıp çözemiyor ve
+// kullanıcı "beklenmeyen karakter" gibi anlamsız bir hata görüyor.
+app.use((hata, _req, res, _next) => {
+  if (hata && (hata.type === 'entity.too.large' || hata.status === 413)) {
+    return res.status(413).json({
+      error: `Dosya çok büyük. En fazla ${PDF_SINIRI.toUpperCase()} olabilir. `
+        + 'e-Nabız tahlil raporları genelde 1 MB\'ın altındadır.',
+    });
+  }
+  if (hata && (hata.type === 'entity.parse.failed' || hata.status === 400)) {
+    return res.status(400).json({ error: 'İstek gövdesi okunamadı.' });
+  }
+  return sunucuHatasi(res, hata, 'ara katman');
+});
+
 app.listen(PORT, () => {
   console.log(`API çalışıyor: http://localhost:${PORT}`);
+  // Posta yapılandırılmamışsa bunu BAŞLANGIÇTA söylemek gerekiyor. Aksi hâlde
+  // yayına alındığında "şifremi unuttum" sessizce işlemez: kullanıcı ekranda
+  // "bağlantı gönderildi" görür ama postası hiç gelmez.
+  if (!eposta.yapilandirildiMi()) {
+    console.warn(
+      '[POSTA] Yapılandırılmamış (MAIL_KULLANICI / MAIL_SIFRE yok).\n'
+      + '[POSTA] Şifre sıfırlama bağlantıları gönderilmeyecek, bu terminale yazılacak.\n'
+      + '[POSTA] Yayına alırken .env.example dosyasındaki adımları uygulayın.',
+    );
+  }
 });

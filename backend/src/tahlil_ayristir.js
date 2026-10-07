@@ -40,6 +40,52 @@ const ATLANACAK = [
   'Birimi', 'Değeri', 'Tarih',
 ];
 
+/* ──────────────────────────────────────────────────────────────────────────
+   KİŞİSEL BİLGİ NÖBETÇİSİ
+   ──────────────────────────────────────────────────────────────────────────
+
+   Yukarıdaki ATLANACAK listesi, kişisel bilgi satırlarını ETİKETİNDEN tanıyıp
+   atlıyor ("Adı/Soyadı", "Doğum Tarihi", "Cinsiyet", "Sağlık Tesisi").
+   Elimizdeki e-Nabız raporlarında etiket ile değer aynı satırda olduğu için
+   bu yeterli.
+
+   AMA BU GÜVENCE DÜZENE BAĞLI. Farklı bir e-Nabız sürümü ya da özel bir
+   laboratuvarın raporu adı etiketsiz bir başlık satırına koyarsa, o satır
+   ATLANACAK'a yakalanmaz; sayı olmayan sonuçlar metinDeger olarak saklandığı
+   için ad bir "test adı" gibi içeri girebilirdi.
+
+   Bu yüzden ikinci bir savunma var: etikete değil İÇERİĞE bakıyor. Düzen
+   değişse de çalışır.
+
+   Nöbetçinin kapsamı kasıtlı olarak DAR. Geniş bir "isim gibi görünen her şeyi
+   at" kuralı gerçek sonuçları da atardı ("Hafif hemolizli" gibi metin
+   sonuçlar var). Yalnızca tahlil sonucu OLAMAYACAK biçimler reddediliyor.
+*/
+
+// Cinsiyet: hiçbir tahlilin sonucu bu kelimeler değildir.
+const CINSIYET_DEGERLERI = /^(erkek|kadın|kadin|male|female)$/i;
+
+// 11 haneli sayı: T.C. kimlik numarası biçimi. Hiçbir tahlil değeri 11 haneli
+// tam sayı değil, dolayısıyla bunu reddetmek hiçbir gerçek sonucu kaybetmez.
+// Elimizdeki raporlarda T.C. yok ama özel laboratuvar raporunda olabilir.
+const KIMLIK_BICIMI = /\b\d{11}\b/;
+
+// Değer alanında tarih: doğum tarihi buraya düşebilir. Testin kendi tarihi
+// satırın tamamından ayrıca okunuyor, o yüzden bunu atmak tarihi kaybettirmez.
+const TARIH_BICIMI = /^\d{2}[./]\d{2}[./]\d{4}$/;
+
+/**
+ * Bu satır tahlil sonucu değil, kişisel bilgi mi?
+ * Sebebi döndürüyor (günlüğe yazmak için), değilse null.
+ */
+function kisiselBilgiMi(butunSatir, ad, metinDeger) {
+  if (KIMLIK_BICIMI.test(butunSatir)) return 'kimlik numarası biçimi';
+  if (CINSIYET_DEGERLERI.test(String(metinDeger || '').trim())) return 'cinsiyet değeri';
+  if (TARIH_BICIMI.test(String(metinDeger || '').trim())) return 'değer alanında tarih';
+  if (CINSIYET_DEGERLERI.test(String(ad || '').trim())) return 'cinsiyet adı';
+  return null;
+}
+
 // Bazı satırların adı "Tam Kan Sayımı (Hemogram) HGB" diye geliyor
 const ONEKLER = ['Tam Kan Sayımı (Hemogram)', 'Tam Kan Sayımı'];
 
@@ -115,11 +161,50 @@ function araligaUyuyorMu(deger, aralik) {
 }
 
 /** PDF tamponunu satır listesine çevirir: [{ y, parcalar: [{x, s}] }] */
-async function pdfSatirlari(tampon) {
+/* ──────────────────────────────────────────────────────────────────────────
+   AYRIŞTIRMA SINIRLARI
+   ──────────────────────────────────────────────────────────────────────────
+
+   BOYUT SINIRI YETERLİ KORUMA DEĞİL. Dosya boyutu, ayrıştırmanın ne kadar
+   süreceğini söylemiyor: sıkıştırılmış birkaç yüz kilobaytlık bir PDF, binlerce
+   sayfa ya da milyonlarca metin parçası açabilir ("PDF bombası"). Tersi de
+   doğru: 4 MB'lık meşru bir rapor zararsızdır. Yani boyut sınırı yalnızca kaba
+   bir ilk süzgeç; işin asıl korumaları bunlar.
+
+   SAYFA SINIRI: e-Nabız tahlil raporları birkaç sayfa. 40 sayfa, meşru hiçbir
+   raporu kesmeyecek kadar geniş, bir bombayı durduracak kadar dar.
+
+   ZAMAN AŞIMI: sayfa sayısı makul olsa bile tek bir sayfa aşırı sayıda metin
+   parçası içerebilir. Süre sınırı, ne şekilde gelirse gelsin işlemin sunucuyu
+   meşgul etmesini kesiyor. Express'in kendi istek zaman aşımı bu işi yapmıyor:
+   istek düşse de ayrıştırma döngüsü arka planda çalışmaya devam ederdi.
+*/
+const EN_FAZLA_SAYFA = 40;
+const AYRISTIRMA_SURESI_MS = 15000;
+
+/** Verilen sözü süre sınırına bağlar. Süre dolarsa hata fırlatır. */
+function sureSinirli(soz, ms, mesaj) {
+  let sayac;
+  const zamanAsimi = new Promise((_c, red) => {
+    sayac = setTimeout(() => red(new Error(mesaj)), ms);
+  });
+  // finally: süre dolmadan bitse de sayaç temizlenmeli, yoksa işlem
+  // sayaç bitene kadar kapanmaz.
+  return Promise.race([soz, zamanAsimi]).finally(() => clearTimeout(sayac));
+}
+
+async function pdfSatirlariHam(tampon) {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const belge = await pdfjs.getDocument({
     data: new Uint8Array(tampon), useSystemFonts: true, isEvalSupported: false,
   }).promise;
+
+  if (belge.numPages > EN_FAZLA_SAYFA) {
+    await belge.destroy();
+    throw new Error(
+      `PDF ${belge.numPages} sayfa; en fazla ${EN_FAZLA_SAYFA} sayfa okunabiliyor.`,
+    );
+  }
 
   const hepsi = [];
   for (let n = 1; n <= belge.numPages; n += 1) {
@@ -142,6 +227,14 @@ async function pdfSatirlari(tampon) {
   return hepsi;
 }
 
+async function pdfSatirlari(tampon) {
+  return sureSinirli(
+    pdfSatirlariHam(tampon),
+    AYRISTIRMA_SURESI_MS,
+    'PDF ayrıştırma zaman aşımına uğradı.',
+  );
+}
+
 /** Satırların ilk parçasının en sık görülen x'i = test adı sütunu */
 function adSutununuBul(satirlar) {
   const sayac = new Map();
@@ -154,8 +247,18 @@ function adSutununuBul(satirlar) {
   return enCok === null ? 120 : enCok;
 }
 
-async function tahlilAyristir(tampon) {
-  const satirlar = await pdfSatirlari(tampon);
+/**
+ * PDF'ten çıkarılmış satırları tahlil listesine çevirir.
+ *
+ * NİYE AYRI FONKSİYON: tahlilAyristir pdfjs'e bağlı ve eşzamansız, bu yüzden
+ * test edilebilmesi için gerçek bir PDF dosyası gerekiyordu. Gerçek bir tahlil
+ * PDF'i de kişisel veri içerdiği için depoya konamaz. Ayrıştırma mantığı
+ * burada saf ve eşzamanlı durduğu için uydurma satırlarla sınanabiliyor —
+ * kişisel bilgi testleri (T01-T06) böyle yazıldı.
+ *
+ * satirlar biçimi: [{ parcalar: [{ s, x }, ...] }, ...]
+ */
+function satirlariAyristir(satirlar) {
   const adX = adSutununuBul(satirlar);
   const testler = [];
   const uyarilar = [];
@@ -204,6 +307,19 @@ async function tahlilAyristir(tampon) {
     const refHam = kalan.slice(birim ? 2 : 1).join(' ');
     const r = referansiCoz(refHam);
 
+    // İKİNCİ SAVUNMA (bkz. kisiselBilgiMi). Etiket tanınmasa bile içerik
+    // tahlil sonucu olamayacak biçimdeyse satır buraya kadar gelip burada
+    // düşüyor; hiçbir zaman yanıta girmiyor, dolayısıyla saklanamıyor da.
+    const kisisel = kisiselBilgiMi(butun, ad, d.metin);
+    if (kisisel) {
+      // Uyarı listesine İÇERİK YAZILMIYOR, yalnızca sebep: uyarılar kullanıcıya
+      // gönderiliyor ve sunucu günlüğüne de düşebiliyor. "Atlanan satır:
+      // ESMA NUR YILDIZHAN" yazmak, korumaya çalıştığımız veriyi ifşa etmek
+      // olurdu.
+      uyarilar.push(`Kişisel bilgi içerdiği değerlendirilen bir satır atlandı (${kisisel}).`);
+      continue;
+    }
+
     testler.push({
       ad,
       deger: d.deger,
@@ -237,6 +353,14 @@ async function tahlilAyristir(tampon) {
   return { tarih, testler: tekil, uyarilar };
 }
 
+/**
+ * PDF tamponunu alır, tahlil listesi döndürür.
+ * pdfjs'e bağlı tek kısım burada; mantık satirlariAyristir içinde.
+ */
+async function tahlilAyristir(tampon) {
+  return satirlariAyristir(await pdfSatirlari(tampon));
+}
+
 /** PDF'teki aralığa göre yorum. Eşik TAMAMEN PDF'ten gelir, bizim eşiğimiz yok. */
 function pdfYorumu(test) {
   if (test.deger === null) return null;
@@ -256,4 +380,8 @@ function pdfYorumu(test) {
   return null;
 }
 
-module.exports = { tahlilAyristir, pdfYorumu, araligaUyuyorMu, referansiCoz, degeriCoz };
+module.exports = {
+  tahlilAyristir, satirlariAyristir, kisiselBilgiMi, sureSinirli,
+  EN_FAZLA_SAYFA,
+  pdfYorumu, araligaUyuyorMu, referansiCoz, degeriCoz,
+};

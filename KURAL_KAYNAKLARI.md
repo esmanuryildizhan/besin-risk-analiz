@@ -3,7 +3,7 @@
 Bu dosya `prisma/hastalik_kurallari.js` dosyasından otomatik üretilir
 (`node belge_uret.js`). Elle düzenleme — kuralı değiştirip yeniden üret.
 
-Üretim tarihi: 2026-10-06
+Üretim tarihi: 2026-10-07
 
 ## Nasıl okunmalı
 
@@ -487,14 +487,6 @@ Gut değerlendirmesi için besinin pürin içeriği (mg/100 g) gerekir. Kaneko 2
 
 <sub>Bu kaynağa dayanan kural sayısı: 4</sub>
 
-**APPEL2006** — Appel LJ, Brands MW, Daniels SR ve ark. Dietary Approaches to Prevent and Treat Hypertension: A Scientific Statement From the American Heart Association. Hypertension. 2006;47(2):296-308.
-
-<sub>Bu kaynağa dayanan kural sayısı: 0</sub>
-
-**ATKINSON2021** — Atkinson FS, Brand-Miller JC, Foster-Powell K, Buyken AE, Goletzke J. International tables of glycemic index and glycemic load values 2021: a systematic review. Am J Clin Nutr. 2021;114(5):1625-1632. doi:10.1093/ajcn/nqab233
-
-<sub>Bu kaynağa dayanan kural sayısı: 0</sub>
-
 **BETO2004** — Beto JA, Bansal VK. Medical Nutrition Therapy in Chronic Kidney Failure: Integrating Clinical Practice Guidelines. J Am Diet Assoc. 2004;104(3):404-409.
 
 <sub>Bu kaynağa dayanan kural sayısı: 4</sub>
@@ -530,10 +522,6 @@ Gut değerlendirmesi için besinin pürin içeriği (mg/100 g) gerekir. Kaneko 2
 **EVERT2019** — Evert AB, Dennison M, Gardner CD ve ark. Nutrition Therapy for Adults With Diabetes or Prediabetes: A Consensus Report. Diabetes Care. 2019;42(5):731-754.
 
 <sub>Bu kaynağa dayanan kural sayısı: 4</sub>
-
-**FRANZ2017** — Franz MJ, MacLeod J, Evert A ve ark. Academy of Nutrition and Dietetics Nutrition Practice Guideline for Type 1 and Type 2 Diabetes in Adults. J Acad Nutr Diet. 2017;117(10):1659-1679.
-
-<sub>Bu kaynağa dayanan kural sayısı: 0</sub>
 
 **FSA2016** — Department of Health, Food Standards Agency. Guide to creating a front of pack (FoP) nutrition label for pre-packed products sold through retail outlets. Kasım 2016.
 

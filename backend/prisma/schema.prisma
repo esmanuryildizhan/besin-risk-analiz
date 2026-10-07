@@ -39,6 +39,69 @@ model User {
   acikRizaAt         DateTime?
   rizaSurumu         String?
 
+  // İKİ AŞAMALI DOĞRULAMA (TOTP — RFC 6238)
+  //
+  // totpSecret: kullanıcıyla paylaşılan gizli anahtar (base32). Telefondaki
+  // doğrulayıcı uygulama bu anahtardan ve o anki zamandan 6 haneli kod üretir;
+  // sunucu aynı hesabı yapıp karşılaştırır. Kod ağdan HİÇ geçmez — e-posta
+  // veya SMS ile kod göndermekten bu yüzden daha güvenli.
+  //
+  // totpEnabled: anahtar üretilir üretilmez AÇILMIYOR. Kullanıcı QR kodu
+  // okutup geçerli bir kod girerek kurulumun çalıştığını kanıtlayana kadar
+  // false kalıyor. Aksi hâlde yanlış kurulumda kullanıcı kendi hesabından
+  // kilitlenirdi.
+  //
+  // totpYedekKodlari: telefon kaybedilirse tek kullanımlık kurtarma kodları.
+  // bcrypt özeti olarak saklanıyor, düz metin değil.
+  totpSecret       String?
+  totpEnabled      Boolean  @default(false)
+  totpYedekKodlari String[]
+
+  // OTURUMLARI TOPTAN GEÇERSİZ KILMA DAMGASI
+  //
+  // Niye gerekli: oturum bileti (JWT) imzalı ve durumsuz, yani sunucu onu geri
+  // çağıramıyor. Şifre sıfırlandığında saldırganın elindeki bilet süresi
+  // dolana kadar çalışmaya devam ederdi — oysa şifre sıfırlamanın asıl amacı
+  // davetsiz misafiri dışarı atmak.
+  //
+  // Çözüm: bu damga. Biletin üretilme anı (iat) bu damgadan ÖNCEYSE bilet
+  // reddediliyor. Şifre her değiştiğinde damga güncelleniyor, böylece o andan
+  // önce verilmiş TÜM biletler tek hamlede geçersiz oluyor.
+  oturumlarGecersizAt DateTime?
+
+  // E-POSTA DOĞRULAMA
+  //
+  // Niye gerekli: bu alan olmadan herkes BAŞKASININ e-posta adresiyle kayıt
+  // olabiliyordu. Sağlık verisi tutan bir uygulamada bu iki yönden kötü —
+  // adresin sahibi adına bir hesap açılmış oluyor, ve şifre sıfırlama
+  // bağlantısı doğrulanmamış bir adrese gidiyor.
+  //
+  // Boşsa (null) kullanıcı giriş YAPAMAZ. Doğrulandığı an damgalanıyor.
+  ePostaDogrulandiAt DateTime?
+
+  // SAKLAMA VE İMHA (bkz. src/saklama.js)
+  //
+  // sonGirisAt: hesabın son hareket zamanı. Saklama süresi buradan sayılıyor —
+  // kişi uygulamayı kullanmayı bıraktığında veriyi tutmanın amacı da ortadan
+  // kalkıyor (KVKK m.4: amaç için gerekli SÜRE KADAR saklama).
+  //
+  // silmeUyarisiAt: silme uyarısının gönderildiği an. Veri sessizce
+  // silinmiyor; uyarı gidiyor, kullanıcı giriş yaparsa hesap kurtuluyor ve
+  // bu alan temizleniyor.
+  sonGirisAt     DateTime?
+  silmeUyarisiAt DateTime?
+
+  // HESAP BAZLI DENEME SAYACI
+  //
+  // Hız sınırlayıcı IP başına çalışıyor; IP değiştirebilen bir saldırgan tek
+  // bir hesabı denemeye devam edebiliyordu. Bu sayaç hesabın kendisine bağlı,
+  // yani saldırganın nereden geldiği önemli değil.
+  //
+  // Başarılı girişte sıfırlanıyor. Eşik aşılınca kilitBitisi doluyor ve o ana
+  // kadar şifre doğru olsa bile giriş reddediliyor.
+  basarisizGiris Int       @default(0)
+  kilitBitisi    DateTime?
+
   createdAt    DateTime @default(now())
 
   allergies    UserAllergy[]
@@ -46,18 +109,72 @@ model User {
   diaryEntries DiaryEntry[]
   diaryDays    DiaryDay[]
   labResults   LabResult[]
+  sifreSifirlamalari PasswordReset[]
+  ePostaDogrulamalari EmailVerification[]
+}
+
+// E-POSTA DOĞRULAMA BİLETİ
+//
+// PasswordReset ile aynı tasarım: bilet saklanmıyor, yalnızca SHA-256 özeti.
+// Ayrı tablo olmasının sebebi, iki biletin ömrünün ve anlamının farklı olması —
+// sıfırlama bileti 60 dakika, doğrulama bileti 24 saat yaşıyor, çünkü kullanıcı
+// kayıt postasını ertesi gün açabilir.
+model EmailVerification {
+  id         Int      @id @default(autoincrement())
+  tokenOzeti String   @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ŞİFRE SIFIRLAMA BİLETİ
+//
+// Niye ayrı tablo: kullanıcı üzerinde tek alan tutsak, aynı anda birden fazla
+// istek ya da "eski bileti geçersiz kıl" mantığı takip edilemezdi. Ayrıca
+// kullanılmış biletlerin kaydı kalıyor.
+//
+// tokenOzeti: BİLETİN KENDİSİ SAKLANMIYOR, yalnızca SHA-256 özeti. Veritabanı
+// sızsa özetten bilete dönülemediği için kimsenin şifresi sıfırlanamaz.
+// Burada bcrypt DEĞİL SHA-256 kullanılıyor: bcrypt'in yavaşlığı insanların
+// seçtiği zayıf şifreleri kaba kuvvetten korumak için. Bu bilet 32 baytlık
+// rastgele veri, tahmin edilemez; yavaş özete ihtiyacı yok.
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  tokenOzeti String  @unique
+  // Biletin geçerlilik sonu. Kısa tutuluyor (bkz. SIFIRLAMA_SURESI_DK):
+  // e-posta kutusu sonradan ele geçse bile eski bağlantı işe yaramasın.
+  expiresAt DateTime
+  // Tek kullanımlık: kullanıldığı an damgalanıyor, silinmiyor — "bu bilet
+  // zaten kullanılmış" demek, "böyle bir bilet yok" demekten farklı.
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model UserAllergy {
   id     Int    @id @default(autoincrement())
-  name   String // "gluten", "milk", "eggs", "peanuts", ... (Food.allergens ile aynı anahtarlar)
+  // ŞİFRELİ (KVKK 2018/10). Çözülünce "gluten", "milk", "eggs" gibi anahtarlar
+  // çıkıyor — Food.allergens ile aynı sözlük.
+  name   String
   userId Int
   user   User   @relation(fields: [userId], references: [id])
 }
 
 model UserDisease {
   id     Int    @id @default(autoincrement())
-  name   String // "diyabet", "hipertansiyon", "kansizlik", "colyak", "kolesterol", ...
+  // ŞİFRELİ (KVKK 2018/10) — kişinin hangi hastalığı olduğu özel nitelikli
+  // kişisel veri. Çözülünce "diyabet", "hipertansiyon", "kansizlik" gibi
+  // anahtarlar çıkıyor.
+  name   String
   userId Int
   user   User   @relation(fields: [userId], references: [id])
 }
@@ -144,7 +261,8 @@ model Food {
   /// Verinin kaynağı; arayüzde besin detayında gösteriliyor (TürKomp için atıf zorunlu)
   source        String
 
-  diaryEntries  DiaryEntry[]
+  // DiaryEntry ilişkisi KALDIRILDI: besin kimliği artık şifreli (foodRef),
+  // dolayısıyla veri tabanı düzeyinde bağ kurulamıyor. Bkz. DiaryEntry.
 
   @@index([category])
   @@index([name])
@@ -206,10 +324,10 @@ model DiseaseRule {
 
 // Bir öğüne eklenen TEK kalem. İki giriş biçimi var ve ikisi de aynı tabloda:
 //
-//   (a) BESİN SEÇEREK  -> foodId + amount (gram) dolu. Kalori veri tabanındaki
+//   (a) BESİN SEÇEREK  -> foodRef + amount (gram) dolu. Kalori veri tabanındaki
 //       besinden hesaplanır. Bu biçimde o gün yenenler risk motorundan da
 //       geçirilebiliyor ("bugün 3 riskli besin yedin").
-//   (b) SERBEST GİRİŞ  -> label + kcal dolu, foodId boş. Dışarıda yenen,
+//   (b) SERBEST GİRİŞ  -> label + kcal dolu, foodRef boş. Dışarıda yenen,
 //       veri tabanında olmayan bir yemek için.
 //
 // kcal HER İKİ DURUMDA da saklanıyor. Besin seçildiğinde de hesaplanıp
@@ -221,11 +339,26 @@ model DiaryEntry {
   date     DateTime @db.Date
   mealType String // "kahvalti" | "ogle" | "aksam" | "ara"
 
-  foodId   Int?
-  food     Food?    @relation(fields: [foodId], references: [id])
-  amount   Float? // gram — yalnızca besin seçildiğinde
+  // HEPSİ ŞİFRELİ (AES-256-GCM, bkz. src/kripto.js). Sayısal alanlar bu yüzden
+  // String; toplama veritabanında değil JS tarafında yapıldığı için sorun
+  // çıkarmıyor.
+  //
+  // foodRef: ŞİFRELİ besin kimliği. Eskiden `foodId Int?` idi ve Food
+  // tablosuna yabancı anahtarla bağlıydı; o hâlde veri tabanı dökümü alan biri
+  // kişinin NE YEDİĞİNİ okuyabiliyordu. Beslenme kaydı, hastalık bağlamıyla
+  // birleştiğinde kişi hakkında bilgi veren bir veridir; düz metin kalması
+  // KVKK m.4 "ölçülülük" ve GDPR m.5(1)(f) "bütünlük ve gizlilik" ilkeleriyle
+  // bağdaşmıyordu.
+  //
+  // BEDELİ, AÇIKÇA: yabancı anahtar kalktı. Veri tabanı artık foodRef'in
+  // gerçek bir besne işaret ettiğini garanti etmiyor; bu denetim uygulamaya
+  // geçti (besin bulunamazsa kalem "Besin kaydı bulunamadı" diye gösteriliyor,
+  // kalori ve gram korunuyor). Şifreli bir değer JOIN'e giremediği için bu
+  // kaçınılmazdı: ya bağ ya gizlilik.
+  foodRef  String?
+  amount   String? // gram — yalnızca besin seçildiğinde
   label    String? // serbest girişin adı ("Dışarıda pide")
-  kcal     Float // giriş anında hesaplanan/yazılan kalori
+  kcal     String // giriş anında hesaplanan/yazılan kalori
 
   userId   Int
   user     User     @relation(fields: [userId], references: [id])
@@ -239,8 +372,10 @@ model DiaryEntry {
 model DiaryDay {
   id         Int      @id @default(autoincrement())
   date       DateTime @db.Date
-  burnedKcal Float    @default(0)
-  waterL     Float    @default(0)
+  // ŞİFRELİ. Varsayılan 0 kaldırıldı: düz metin "0" çözülemezdi.
+  // Boş (null) değer okuma tarafında 0 sayılıyor.
+  burnedKcal String?
+  waterL     String?
 
   userId     Int
   user       User     @relation(fields: [userId], references: [id])
@@ -253,18 +388,27 @@ model DiaryDay {
 // kendi sınıflaması kullanılıyor, bizim koyduğumuz bir eşik yok.
 // (Karar: 3 Ekim 2026 — bkz. claude/tahlil-ve-makine-ogrenmesi-karari.md)
 model LabResult {
+  // ŞİFRELİ ALANLAR — KVKK Kurulu 2018/10 sayılı kararı, özel nitelikli
+  // kişisel verinin "kriptografik yöntemler kullanılarak muhafaza edilmesini"
+  // istiyor. Aşağıdaki alanlar AES-256-GCM ile şifreli saklanıyor
+  // (src/kripto.js). Sayısal olanlar da bu yüzden String: şifreli metin
+  // sayı değildir.
+  //
+  // userId ve testDate BİLEREK şifresiz: sorgular onların üzerinden yürüyor
+  // ve ikisi tek başına sağlık verisi değil. Şifreli alanda veritabanı
+  // araması ve sıralaması yapılamaz.
   id       Int      @id @default(autoincrement())
-  testName String
-  value    Float?  // sayı okunamadıysa (ör. "O Rh(+)") boş, textValue dolu
-  unit     String?
-  refLow   Float?
-  refHigh  Float?
+  testName String   // şifreli
+  value    String?  // şifreli sayı; okunamayan sonuçta boş, textValue dolu
+  unit     String?  // şifreli
+  refLow   String?  // şifreli sayı
+  refHigh  String?  // şifreli sayı
   testDate DateTime
 
   // "< 0,5" gibi sonuçlarda işleç ayrı tutuluyor: 0,5 ile "0,5'ten küçük"
   // aynı şey değil ve kural yazarken ayrımı gerekiyor.
-  valueOp   String?
-  textValue String? // sayı olmayan sonuç ("O Rh(+)")
+  valueOp   String? // şifreli
+  textValue String? // şifreli — sayı olmayan sonuç ("O Rh(+)")
 
   // PDF'in kendi sınıflaması. Laboratuvar bazı testlerde tek aralık yerine
   // kademe veriyor ("Optimum", "Sınırda yüksek", "Orta derecede risk") ve o

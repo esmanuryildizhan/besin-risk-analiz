@@ -5,13 +5,16 @@
 import React, { useState } from 'react';
 import {
   User, Apple, ChevronRight, ArrowLeft, Activity, Shield,
-  Loader2,
+  Loader2, Mail,
 } from 'lucide-react';
-import { api, tokenKaydet } from '../api';
+import { api } from '../api';
 import { HataKutusu, SecimKutusu } from '../components/ortak';
 import { OnayBloku, useKvkk } from '../kvkk/KvkkBilesenleri';
 
-export const RegisterScreen = ({ onRegister, onBack, meta }) => {
+export const RegisterScreen = ({ onBack, meta }) => {
+  // onRegister KALDIRILDI: kayıt artık doğrudan içeri almıyor. Sunucu oturum
+  // bileti vermiyor, kullanıcının önce e-posta adresini doğrulaması gerekiyor.
+  const [kayitTamam, setKayitTamam] = useState(false);
   const [form, setForm] = useState({
     name: '', surname: '', email: '', password: '', gender: '', diet: 'Normal',
   });
@@ -30,18 +33,47 @@ export const RegisterScreen = ({ onRegister, onBack, meta }) => {
   const kaydet = async () => {
     setHata(''); setBekliyor(true);
     try {
-      const sonuc = await api.kayitOl({
+      await api.kayitOl({
         ...form, diseases: hastaliklar, allergies: alerjiler,
         aydinlatmaOkundu: aydinlatma, acikRiza: riza === true,
       });
-      tokenKaydet(sonuc.token);
-      onRegister(sonuc.user);
+      // Sunucu, adres zaten kayıtlı olsa da AYNI yanıtı veriyor (hesap sayımını
+      // engellemek için). Arayüz de bu yüzden ikisini ayırt etmiyor.
+      setKayitTamam(true);
     } catch (e) {
       setHata(e.message);
     } finally {
       setBekliyor(false);
     }
   };
+
+  if (kayitTamam) {
+    return (
+      <div className="w-full min-h-screen flex items-center justify-center bg-[#F8F9FA] p-4">
+        <div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-[460px] border border-gray-100 text-center">
+          <div className="w-20 h-20 bg-green-50 rounded-3xl flex items-center justify-center mb-5 border border-green-100 mx-auto">
+            <Mail size={40} className="text-green-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-3">E-postanızı kontrol edin</h1>
+          <p className="text-gray-500 text-sm leading-relaxed mb-2">
+            <span className="font-semibold text-gray-700">{form.email}</span> adresine
+            bir doğrulama bağlantısı gönderildi. Hesabınızı kullanmaya başlamak
+            için bağlantıya tıklayın.
+          </p>
+          <p className="text-xs text-gray-400 leading-relaxed mb-6">
+            Bağlantı 24 saat geçerlidir. Posta gelmediyse gereksiz (spam)
+            klasörünü kontrol edin.
+          </p>
+          <button
+            onClick={onBack}
+            className="w-full bg-gradient-to-r from-green-600 to-teal-700 text-white font-bold py-4 rounded-xl shadow-lg transition"
+          >
+            Giriş ekranına dön
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-screen bg-[#F8F9FA] overflow-y-auto py-10 px-4">
@@ -66,7 +98,7 @@ export const RegisterScreen = ({ onRegister, onBack, meta }) => {
               <input placeholder="Soyad" value={form.surname} onChange={degistir('surname')} className="p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
             </div>
             <input type="email" placeholder="E-posta Adresi" value={form.email} onChange={degistir('email')} className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
-            <input type="password" placeholder="Şifre (en az 6 karakter)" value={form.password} onChange={degistir('password')} className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
+            <input type="password" placeholder="Şifre (en az 8 karakter)" value={form.password} onChange={degistir('password')} className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500" />
             <select value={form.gender} onChange={degistir('gender')} className="w-full p-4 bg-gray-50 border rounded-xl text-gray-600 outline-none focus:border-green-500">
               <option value="">Cinsiyet seçiniz</option>
               <option value="Kadın">Kadın</option>

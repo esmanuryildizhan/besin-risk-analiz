@@ -10,9 +10,18 @@
 // yeni onay isteniyor (index.js -> onayGerekliMi).
 //
 // ───────────────────────────────────────────────────────────────────────────
-// ⚠ DOLDURULACAK 1 YER kaldı: [SAĞLAYICI ADI VE SUNUCU KONUMU].
-//   Barındırma seçilince (Render/Neon gibi) doldurulacak.
 // ⚠ Bu metinler hukukçu tarafından yazılmamıştır; şablondur.
+//
+// ⚠ DEMO İBARESİ: metin şu an "demo ortamı, gerçek sağlık verisi girilmemeli"
+//   diyor (bölüm 3 ve 9). Bu, güvenli varsayılan: demo olarak yayınlanan bir
+//   uygulamada gerçek kişisel veri işlenmediği için KVKK yükümlülüğü doğmuyor
+//   (KVKK m.28, GDPR m.2(2)(c) ile aynı mantık).
+//
+//   GERÇEK KULLANICI ALINACAKSA bu ibareler kaldırılmalı VE şunlar
+//   tamamlanmalı: saklama/imha politikası, ihlal bildirimi süreci, VERBİS
+//   değerlendirmesi, yurt dışı aktarım dayanağı (sunucu Türkiye dışında
+//   olduğu için KVKK m.9 devreye giriyor). Ayrıntı:
+//   claude/guvenlik-kararlari-ve-sizma-analizi.md
 // ───────────────────────────────────────────────────────────────────────────
 //
 // BİÇİM NOTU: metinde kalın (**) vurgu KULLANILMIYOR — proje sahibinin
@@ -29,7 +38,7 @@
 // Aynı karar gereği aydınlatma ve açık rıza AYRI metinler; aydınlatma için
 // "kabul ediyorum" değil "okudum ve anladım" beyanı alınıyor.
 
-const SURUM = '1.2';
+const SURUM = '1.4';
 const SURUM_TARIHI = '7 Ekim 2026';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -66,10 +75,21 @@ kişilere satılmaz veya devredilmez.
 
 ## 3. Kişisel Verilerinizin Aktarılması
 
-Verileriniz, uygulamanın çalışabilmesi için barındırma ve veritabanı hizmeti
-alınan [SAĞLAYICI ADI VE SUNUCU KONUMU] sistemlerinde saklanır. Bunun dışında,
-yetkili kamu kurum ve kuruluşlarının mevzuattan doğan talepleri saklı kalmak
-üzere hiçbir kişi veya kuruma aktarılmaz.
+Verileriniz, uygulamanın çalışabilmesi için aşağıdaki hizmet sağlayıcıların
+sistemlerinde saklanır:
+
+- Veritabanı: Neon (sunucu konumu: Frankfurt, Almanya),
+- Uygulama sunucusu: Render (sunucu konumu: Frankfurt, Almanya),
+- Arayüz dağıtımı: Vercel.
+
+Sunucular Türkiye dışında bulunduğundan, verilerin saklanması 6698 sayılı
+Kanun'un 9'uncu maddesi anlamında yurt dışına aktarım niteliğindedir. Bu
+nedenle uygulama DEMO ORTAMI olarak sunulmaktadır ve gerçek sağlık verisi
+girilmemesi gerekir (bkz. bölüm 8).
+
+Bunun dışında, yetkili kamu kurum ve kuruluşlarının mevzuattan doğan talepleri
+saklı kalmak üzere hiçbir kişi veya kuruma aktarılmaz. Verileriniz reklam ve
+pazarlama amacıyla hiçbir üçüncü tarafa verilmez.
 
 ## 4. Toplama Yöntemi ve Hukuki Sebebi
 
@@ -79,10 +99,27 @@ Uygulama başka hiçbir kaynaktan veri toplamaz.
 
 Bu uygulamanın kullanımı zorunlu değildir. Bu nedenle sağlık verileriniz dâhil
 tüm verileriniz yalnızca açık rızanıza dayanılarak işlenir (6698 sayılı Kanun
-m.6/2). Verileriniz hesabınız var olduğu sürece saklanır; hesabınızı
-sildiğinizde tüm kayıtlarınız geri dönüşsüz biçimde silinir.
+m.6/2).
 
-## 5. Haklarınız
+## 5. Saklama Süresi ve İmha
+
+Verileriniz süresiz saklanmaz. Saklama süresi, verinin işlenme amacına
+bağlıdır: amaç, besinleri sizin sağlık profilinize göre değerlendirmektir ve
+uygulamayı kullanmayı bıraktığınızda bu amaç ortadan kalkar.
+
+Bu nedenle 180 gün boyunca giriş yapılmayan hesaplar, içindeki tüm verilerle
+birlikte otomatik olarak silinir. Silme işleminden 14 gün önce e-posta
+adresinize uyarı gönderilir; bu süre içinde giriş yapmanız hesabınızın
+silinmesini önler.
+
+Hesabınızı dilediğiniz an Profil ekranından kendiniz de silebilirsiniz. Her
+iki durumda da hastalık ve alerji kayıtlarınız, tahlil sonuçlarınız, günlük
+takip kayıtlarınız ve hesap bilgileriniz geri dönüşsüz biçimde silinir.
+
+Yüklediğiniz tahlil raporu (PDF) hiçbir aşamada diske yazılmaz; yalnızca
+bellekte okunur ve okunan değerlerden sizin onayladıklarınız kaydedilir.
+
+## 6. Haklarınız
 
 6698 sayılı Kanun'un 11'inci maddesi uyarınca; kişisel verinizin işlenip
 işlenmediğini öğrenme, işlenmişse bilgi talep etme, işlenme amacını ve
@@ -96,13 +133,28 @@ giderilmesini talep etme haklarına sahipsiniz.
 Taleplerinizi aşağıdaki e-posta adresine iletebilirsiniz. Ayrıca hesabınızı
 ve tüm verilerinizi Profil ekranından kendiniz silebilirsiniz.
 
-## 6. Önemli Uyarı
+## 7. Önemli Uyarı
 
 Uygulama girdiğiniz verileri otomatik olarak değerlendirir. Bu değerlendirme
 tıbbi teşhis veya tedavi önerisi değildir ve hekim görüşünün yerine geçmez.
 Sağlığınızla ilgili kararlar için hekiminize başvurunuz.
 
-## 7. Veri Sorumlusu ve İletişim
+## 8. Demo Ortamı Uyarısı — Önemli
+
+Bu uygulama bir öğrenme ve geliştirme projesidir ve demo ortamı olarak
+sunulmaktadır. Gerçek sağlık verinizi girmeyiniz. Denemek için gerçek olmayan
+hastalık, alerji ve tahlil bilgileri kullanınız.
+
+Sebebi: sunucular Türkiye dışında bulunmakta ve bu proje bir kurumun değil tek
+bir kişinin geliştirdiği kişisel bir çalışmadır. Gerçek sağlık verisi işlemek,
+6698 sayılı Kanun kapsamında yurt dışına aktarım dayanağı, saklama ve imha
+politikası ile veri ihlali bildirim süreci gibi yükümlülükler doğurur; bu
+ortamda bunlar sağlanmamıştır.
+
+Hesabınızı ve girdiğiniz tüm verileri profil ekranından dilediğiniz an
+silebilirsiniz.
+
+## 9. Veri Sorumlusu ve İletişim
 
 Besin Risk Analiz Sistemi, İstanbul Beykent Üniversitesi öğrencisi Esma Nur
 Yıldızhan tarafından kişisel olarak geliştirilen bir projedir. Üniversite bu

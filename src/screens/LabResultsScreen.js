@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { Modal } from '../components/ortak';
+import { DemoUyarisi } from '../kvkk/KvkkBilesenleri';
 
 /**
  * Bir sonucun rozeti. ETİKET TAMAMEN PDF'TEN GELİYOR — bizim koyduğumuz bir
@@ -108,10 +109,23 @@ export const LabResultsScreen = () => {
 
   useEffect(() => { listeyiYukle(); }, [listeyiYukle]);
 
+  // Sunucu da 2 MB sınırı uyguluyor; buradaki kontrol onun yerine geçmiyor,
+  // kullanıcıyı boşuna bekletmemek için. Büyük dosya yüklenip sonunda
+  // reddedilmesi yerine seçildiği anda söylüyoruz.
+  const PDF_SINIRI_MB = 3;
+
   const dosyaSecildi = async (e) => {
     const dosya = e.target.files && e.target.files[0];
     if (!dosya) return;
-    setHata(''); setMesaj(''); setIslemde(true);
+    setHata(''); setMesaj('');
+    if (dosya.size > PDF_SINIRI_MB * 1024 * 1024) {
+      const boyut = (dosya.size / (1024 * 1024)).toFixed(1);
+      setHata(`Dosya ${boyut} MB. En fazla ${PDF_SINIRI_MB} MB olabilir. `
+        + 'e-Nabız tahlil raporları genelde 1 MB\'ın altındadır.');
+      if (dosyaRef.current) dosyaRef.current.value = '';
+      return;
+    }
+    setIslemde(true);
     try {
       const veri = await api.tahlilOku(dosya);
       setOkunan(veri);
@@ -227,6 +241,7 @@ export const LabResultsScreen = () => {
             e-Nabız PDF'inizi yükleyin. Sonuçlar okunur, siz onaylarsınız, sonra kaydedilir.
           </p>
         </div>
+        <div className="mb-5"><DemoUyarisi /></div>
         <div className="flex gap-3">
           <input ref={dosyaRef} type="file" accept="application/pdf,.pdf"
             onChange={dosyaSecildi} className="hidden" />
