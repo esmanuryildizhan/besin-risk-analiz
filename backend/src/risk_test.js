@@ -1330,6 +1330,7 @@ test('C12 Kritik veri eksikse besin UYGUN sayılmıyor', () => {
   const s = riskHesapla(besin, KURGU_PROFIL, kuralKumesi);
   esit(s.seviye, 'DIKKAT');
   dogru(/SÖYLENEMEZ/.test(s.bilgiNotlari[0].mesaj), 'Kritik eksik notu beklenir');
+  esit(s.bilgiNotlari[0].kritik, true, 'kritik bayrağı işaretlenmedi');
 });
 
 test('C13 Kritik olmayan veri eksikse seviye yükselmiyor', () => {
@@ -1344,6 +1345,10 @@ test('C13 Kritik olmayan veri eksikse seviye yükselmiyor', () => {
   const s = riskHesapla(besin, KURGU_PROFIL, kuralKumesi);
   esit(s.seviye, 'UYGUN');
   dogru(s.bilgiNotlari.length === 1, 'Yine de bilgi notu düşmeli');
+  // Arayüz tam olarak bu bayrağa bakıp notu GİZLİYOR. Bayrak kaybolur ya da
+  // undefined olursa süzgeç (kritik !== false) notu geçirir ve her besinde
+  // tekrar görünür. Not motorda duruyor, yalnızca kartta gösterilmiyor.
+  esit(s.bilgiNotlari[0].kritik, false, 'kritik olmayan not false ile işaretlenmedi');
 });
 
 test('C14 Değerlendirilemeyen hastalık "uygun" demiyor', () => {

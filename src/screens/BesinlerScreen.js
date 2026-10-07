@@ -48,6 +48,11 @@ const BesinDetay = ({ besin, onKapat }) => {
   const stil = stilAl(besin.analiz.seviye);
   const Ikon = stil.icon;
   const oran = besin.portionGrams / 100;
+
+  // Sunucu, eksik veri notlarını kritik olup olmadığıyla işaretliyor.
+  // Yalnızca `kritik === false` olanlar gizleniyor; hastalık açıklama
+  // notlarında bu alan hiç yok, onlar görünmeye devam ediyor.
+  const gosterilecekNotlar = besin.analiz.bilgiNotlari.filter((n) => n.kritik !== false);
   const g = (v, birim = 'g', basamak = 1) =>
     v === null || v === undefined ? '—' : `${(v).toFixed(basamak)} ${birim}`;
   const p = (v, birim = 'g', basamak = 1) =>
@@ -118,9 +123,17 @@ const BesinDetay = ({ besin, onKapat }) => {
           </div>
         )}
 
-        {besin.analiz.bilgiNotlari.length > 0 && (
+        {/* Yalnızca ağırlığı olan notlar gösteriliyor.
+            Eksik veri notlarının kritik olmayanları (kritik === false)
+            gizli: glisemik indeks veritabanındaki 155 besnin HİÇBİRİNDE yok,
+            C vitamini 47'sinde var. Yani o not her kartta çıkıyordu ve besin
+            hakkında bir şey söylemiyordu. Her kartta tekrarlanan bir uyarı
+            okunmaz hâle geliyor ve yanındaki kritik uyarıyı da götürüyor.
+            Kritik eksikler (netCarbs, saturatedFat, sodiumMg, sugars) ve
+            hastalık açıklama notları görünmeye devam ediyor. */}
+        {gosterilecekNotlar.length > 0 && (
           <div className="space-y-2">
-            {besin.analiz.bilgiNotlari.map((n, i) => (
+            {gosterilecekNotlar.map((n, i) => (
               <div key={i} className="bg-gray-50 border border-gray-200 text-gray-600 rounded-xl px-4 py-3 text-sm flex gap-2">
                 <Info size={16} className="shrink-0 mt-0.5" />
                 <span><span className="font-semibold">{n.hastalik}:</span> {n.mesaj}</span>

@@ -391,6 +391,19 @@ function riskHesapla(besin, kullanici, kurallar) {
       const benzersiz = [...new Set(eksikVeriler)];
       sonuc.bilgiNotlari.push({
         hastalik: hastalik.name,
+        // Notun ağırlığı. true ise eksik veri DEĞERLENDİRMEYİ DEĞİŞTİRİYOR
+        // (aşağıda seviye DİKKAT'e yükseliyor), false ise yalnızca bilgi.
+        //
+        // NİYE AYRI BİR ALAN: arayüz yalnızca kritik olanları gösteriyor.
+        // Ölçüldü (7 Ekim 2026) — glycemicIndex 155 besinin 0'ında dolu,
+        // vitaminCMg 47'sinde. Yani kritik olmayan not pratikte HER besinde
+        // çıkıyordu ve besin hakkında bir şey söylemiyordu; veritabanının
+        // durumunu söylüyordu. Her kartta tekrarlanınca kullanıcı tüm
+        // notları okumayı bırakıyor — asıl kritik olanı da.
+        //
+        // Not SİLİNMİYOR, yalnızca gösterilmiyor: hangi değerlendirmenin
+        // hangi veri eksikliğiyle yapıldığı API cevabında duruyor.
+        kritik: kritikEksik,
         mesaj: kritikEksik
           ? `Bu besin için ${benzersiz.join(', ')} verisi yok; güvenli olduğu SÖYLENEMEZ, dikkatli olun.`
           : `Bu besin için ${benzersiz.join(', ')} verisi yok; değerlendirme eksik olabilir.`,
