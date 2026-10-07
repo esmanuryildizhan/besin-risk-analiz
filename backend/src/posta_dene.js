@@ -44,6 +44,19 @@ function hatayiYorumla(h) {
       '     uygulama şifresi üretmiyor.',
     ].join('\n');
   }
+  if (kod === 'ENETUNREACH' || mesaj.includes('ENETUNREACH')) {
+    return [
+      'Ağa ulaşılamadı — büyük ihtimalle IPv6 denendi ve ortamda IPv6 yok.',
+      '',
+      'Bu hata YAŞANDI ve düzeltildi (src/eposta.js): nodemailer sunucu adını',
+      'hem IPv4 hem IPv6 olarak çözüp aralarından RASTGELE birini seçiyordu.',
+      'Render konteynerinde IPv6 bağlantısı olmadığı için gönderimlerin yaklaşık',
+      'yarısı patlıyordu — kalıcı değil, yazı-tura bir hata.',
+      '',
+      'Artık adres kendimiz IPv4\'e çözülüp öyle veriliyor. Bu hatayı yine',
+      'görüyorsanız eposta.js içindeki ipv4Coz() çalışmıyor demektir.',
+    ].join('\n');
+  }
   if (kod === 'ETIMEDOUT' || kod === 'ESOCKET' || kod === 'ECONNECTION') {
     return [
       'Sunucuya hiç bağlanılamadı (kimlik doğrulamaya sıra gelmedi).',

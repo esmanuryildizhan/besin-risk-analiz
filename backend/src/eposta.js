@@ -15,6 +15,8 @@
 // günlüğüne yazılıyor, böylece posta hesabı olmadan da (yerel geliştirmede,
 // ya da projeyi klonlayan biri) şifre sıfırlama akışı denenebiliyor.
 const nodemailer = require('nodemailer');
+const dns = require('dns').promises;
+const net = require('net');
 
 const SUNUCU = process.env.MAIL_SUNUCU || 'smtp.gmail.com';
 const PORT = Number(process.env.MAIL_PORT || 587);
@@ -23,21 +25,61 @@ const SIFRE = process.env.MAIL_SIFRE || '';
 const GONDEREN = process.env.MAIL_GONDEREN || KULLANICI;
 
 let tasiyici = null;
+let tasiyiciIp = null;
+let cozumZamani = 0;
+
+// Çözülen adres bu kadar süre yeniden kullanılıyor. Gmail'in IP'leri dönüyor,
+// o yüzden süresiz önbelleklemiyoruz; ama her postada DNS sorgusu da gereksiz.
+const IP_TAZELIK_MS = 10 * 60 * 1000;
 
 function yapilandirildiMi() {
   return Boolean(KULLANICI && SIFRE);
 }
 
-function tasiyiciyiAl() {
-  if (!tasiyici) {
+/**
+ * SMTP sunucusunun IPv4 adresini çözer.
+ *
+ * NİYE KENDİMİZ ÇÖZÜYORUZ — gerçek bir hatadan çıktı:
+ * Render'ın konteynerinde IPv6 bağlantısı yok. Nodemailer ise adı hem IPv4 hem
+ * IPv6 olarak çözüp iki listeyi birleştiriyor ve aralarından RASTGELE birini
+ * seçiyor (shared/index.js, formatDNSValue). IPv6 seçildiği anda bağlantı
+ * "connect ENETUNREACH ...:587" diye patlıyor.
+ *
+ * Yani hata kalıcı değil, YAZI-TURA: bazı postalar gidiyor, bazıları gitmiyor.
+ * Teşhis edilmesi en zor hata türü.
+ *
+ * Çözüm aynı dosyadan geliyor: nodemailer, host zaten bir IP adresiyse DNS'i
+ * hiç çalıştırmıyor (resolveHostname içinde net.isIP kontrolü). Biz IPv4'e
+ * çözüp öyle veriyoruz, rastgele seçim devreye hiç girmiyor.
+ */
+async function ipv4Coz() {
+  if (net.isIP(SUNUCU)) return SUNUCU;          // zaten IP verilmişse dokunma
+  if (tasiyiciIp && Date.now() - cozumZamani < IP_TAZELIK_MS) return tasiyiciIp;
+  const adresler = await dns.resolve4(SUNUCU);
+  if (!adresler || !adresler.length) {
+    throw new Error(`${SUNUCU} için IPv4 adresi bulunamadı.`);
+  }
+  cozumZamani = Date.now();
+  return adresler[0];
+}
+
+async function tasiyiciyiAl() {
+  const ip = await ipv4Coz();
+  if (!tasiyici || tasiyiciIp !== ip) {
     tasiyici = nodemailer.createTransport({
-      host: SUNUCU,
+      host: ip,
       port: PORT,
       // 587 STARTTLS kullanıyor: bağlantı düz başlıyor, sonra şifreli hâle
       // geçiyor. secure:true yalnızca 465 için doğru olurdu.
       secure: PORT === 465,
       auth: { user: KULLANICI, pass: SIFRE },
+      // SERTİFİKA DOĞRULAMASI BOZULMUYOR: bağlantı IP'ye gidiyor ama TLS
+      // el sıkışmasında sunucu adı olarak alan adı sunuluyor, sertifika da
+      // ona göre doğrulanıyor. Bu satır olmasaydı sertifika IP'ye
+      // uymadığı için bağlantı reddedilirdi.
+      tls: { servername: SUNUCU },
     });
+    tasiyiciIp = ip;
   }
   return tasiyici;
 }
@@ -57,38 +99,28 @@ async function gonder(alici, konu, metin, gunlukNotu) {
     );
     return false;
   }
-  await tasiyiciyiAl().sendMail({ from: GONDEREN, to: alici, subject: konu, text: metin });
+  const t = await tasiyiciyiAl();
+  await t.sendMail({ from: GONDEREN, to: alici, subject: konu, text: metin });
   return true;
 }
 
 async function sifirlamaGonder(alici, baglanti, dakika) {
-  if (!yapilandirildiMi()) {
-    console.warn(
-      '[POSTA] E-posta yapılandırılmamış (MAIL_KULLANICI / MAIL_SIFRE yok).\n'
-      + `[POSTA] Sıfırlama bağlantısı gönderilmedi, günlüğe yazılıyor:\n${baglanti}`,
-    );
-    return false;
-  }
-
-  const metin = [
-    'Besin Risk Analiz Sistemi hesabınız için şifre sıfırlama talebi alındı.',
-    '',
-    'Yeni şifrenizi belirlemek için aşağıdaki bağlantıyı açın:',
-    baglanti,
-    '',
-    `Bu bağlantı ${dakika} dakika geçerlidir ve yalnızca bir kez kullanılabilir.`,
-    '',
-    'Bu talebi siz yapmadıysanız bu iletiyi yok sayabilirsiniz; şifreniz',
-    'değişmeyecektir.',
-  ].join('\n');
-
-  await tasiyiciyiAl().sendMail({
-    from: GONDEREN,
-    to: alici,
-    subject: 'Şifre sıfırlama — Besin Risk Analiz Sistemi',
-    text: metin,
-  });
-  return true;
+  return gonder(
+    alici,
+    'Şifre sıfırlama — Besin Risk Analiz Sistemi',
+    [
+      'Besin Risk Analiz Sistemi hesabınız için şifre sıfırlama talebi alındı.',
+      '',
+      'Yeni şifrenizi belirlemek için aşağıdaki bağlantıyı açın:',
+      baglanti,
+      '',
+      `Bu bağlantı ${dakika} dakika geçerlidir ve yalnızca bir kez kullanılabilir.`,
+      '',
+      'Bu talebi siz yapmadıysanız bu iletiyi yok sayabilirsiniz; şifreniz',
+      'değişmeyecektir.',
+    ].join('\n'),
+    `Sıfırlama bağlantısı gönderilmedi, günlüğe yazılıyor:\n${baglanti}`,
+  );
 }
 
 /**
@@ -181,7 +213,8 @@ async function silmeUyarisiGonder(alici, kalanGun) {
  */
 async function baglantiyiDene() {
   if (!yapilandirildiMi()) return { tamam: false, sebep: 'yapilandirilmamis' };
-  await tasiyiciyiAl().verify();
+  const t = await tasiyiciyiAl();
+  await t.verify();
   return { tamam: true };
 }
 
