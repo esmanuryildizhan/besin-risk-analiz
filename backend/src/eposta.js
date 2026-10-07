@@ -23,16 +23,49 @@ const nodemailer = require('nodemailer');
 const dns = require('dns').promises;
 const net = require('net');
 
+/**
+ * Ortam değişkeni değerini temizler ve ne yaptığını söyler. SAF fonksiyon.
+ *
+ * NİYE VAR: Render'ın ortam değişkeni ekranı değeri HARFİ HARFİNE alıyor.
+ * `.env` dosyasında tırnak kullanmaya alışmış biri aynı değeri Render'a
+ * tırnakla yapıştırınca tırnak değerin PARÇASI oluyor. Sonuç, Brevo'da
+ * `401 Key not found` — yani "anahtar yanlış" gibi görünen, aslında
+ * "anahtarın etrafında tırnak var" olan bir hata. Bu tuzağa bu projede
+ * bir kez düşüldü; hata mesajından sebebi anlamak imkânsızdı.
+ *
+ * Kırpma her zaman doğru: ne API anahtarı ne e-posta adresi baş/son boşlukla
+ * başlar. Tırnak soyma da güvenli: Brevo anahtarları (xkeysib-...) ve e-posta
+ * adresleri tırnak içermiyor. Ama SESSİZCE yapılmıyor — ne düzeltildiyse
+ * çağıran tarafa bildiriliyor ki yapılandırma gerçekten düzelsin.
+ */
+function ortamiTemizle(hamDeger) {
+  const ham = typeof hamDeger === 'string' ? hamDeger : '';
+  let deger = ham.trim();
+  const bosluk = deger !== ham;
+
+  let tirnak = false;
+  // Tek seferde bir katman; iç içe tırnak gerçek bir senaryo değil.
+  if (deger.length >= 2
+      && (deger[0] === '"' || deger[0] === "'")
+      && deger[deger.length - 1] === deger[0]) {
+    deger = deger.slice(1, -1).trim();
+    tirnak = true;
+  }
+  return { deger, bosluk, tirnak };
+}
+
 const SUNUCU = process.env.MAIL_SUNUCU || 'smtp.gmail.com';
 const PORT = Number(process.env.MAIL_PORT || 587);
-const KULLANICI = process.env.MAIL_KULLANICI || '';
-const SIFRE = process.env.MAIL_SIFRE || '';
+const KULLANICI = ortamiTemizle(process.env.MAIL_KULLANICI).deger;
+const SIFRE = ortamiTemizle(process.env.MAIL_SIFRE).deger;
 
-const BREVO_ANAHTAR = process.env.BREVO_API_KEY || '';
+const BREVO_HAM = ortamiTemizle(process.env.BREVO_API_KEY);
+const BREVO_ANAHTAR = BREVO_HAM.deger;
 // Brevo'da doğrulanmış gönderen adresi. Tanımlı değilse SMTP kullanıcısına
 // düşüyor; ikisi de yoksa gönderim yapılamıyor.
-const GONDEREN = process.env.MAIL_GONDEREN || KULLANICI;
-const GONDEREN_ADI = process.env.MAIL_GONDEREN_ADI || 'Besin Risk Analiz';
+const GONDEREN_HAM = ortamiTemizle(process.env.MAIL_GONDEREN);
+const GONDEREN = GONDEREN_HAM.deger || KULLANICI;
+const GONDEREN_ADI = ortamiTemizle(process.env.MAIL_GONDEREN_ADI).deger || 'Besin Risk Analiz';
 
 let tasiyici = null;
 let tasiyiciIp = null;
@@ -182,6 +215,22 @@ async function brevoIleGonder(alici, konu, metin) {
       const g = await cevap.json();
       ayrinti = g && (g.message || g.code) ? ` — ${g.code || ''} ${g.message || ''}`.trim() : '';
     } catch (e) { /* gövde JSON değil */ }
+    if (cevap.status === 401) {
+      // Anahtarın KENDİSİ günlüğe yazılmıyor — Render günlükleri sır saklamaz.
+      // Yazılanlar anahtarın ŞEKLİ: hangi ihtimalin elendiğini gösteriyor.
+      console.error(
+        '[POSTA] Brevo anahtarı reddedildi. Anahtarın şekli:\n'
+        + `[POSTA]   uzunluk: ${BREVO_ANAHTAR.length} karakter\n`
+        + `[POSTA]   "xkeysib-" ile başlıyor mu: ${BREVO_ANAHTAR.startsWith('xkeysib-') ? 'EVET' : 'HAYIR'}\n`
+        + `[POSTA]   çevresinde tırnak vardı mı: ${BREVO_HAM.tirnak ? 'EVET (soyuldu)' : 'hayır'}\n`
+        + `[POSTA]   baş/son boşluk vardı mı: ${BREVO_HAM.bosluk ? 'EVET (kırpıldı)' : 'hayır'}\n`
+        + '[POSTA] "xkeysib-" ile başlamıyorsa yanlış değer kopyalanmış:\n'
+        + '[POSTA]   SMTP şifresi ya da başka bir alan olabilir. Doğrusu\n'
+        + '[POSTA]   Settings > SMTP & API > API Keys & MCP altındaki anahtar.\n'
+        + '[POSTA] Şekil doğruysa anahtar silinmiş ya da devre dışı bırakılmış\n'
+        + '[POSTA]   olabilir ("Create MCP server API key" seçeneği bunu yapıyor).',
+      );
+    }
     throw new Error(`Brevo ${cevap.status}${ayrinti}`);
   }
   return true;
@@ -340,11 +389,17 @@ function ayarlar() {
     sifreUzunlugu: SIFRE.length,
     brevoAnahtariVar: Boolean(BREVO_ANAHTAR),
     gonderen: GONDEREN || null,
+    // Hangi değerlerin etrafında tırnak/boşluk bulunup temizlendiği.
+    // Temizlik sessiz kalırsa Render'daki yanlış değer hiç düzelmez.
+    temizlenenler: [
+      BREVO_HAM.tirnak || BREVO_HAM.bosluk ? 'BREVO_API_KEY' : null,
+      GONDEREN_HAM.tirnak || GONDEREN_HAM.bosluk ? 'MAIL_GONDEREN' : null,
+    ].filter(Boolean),
   };
 }
 
 module.exports = {
   yontem,
   sifirlamaGonder, dogrulamaGonder, zatenKayitliGonder, silmeUyarisiGonder,
-  yapilandirildiMi, eksikNe, yoluCoz, baglantiyiDene, ayarlar,
+  yapilandirildiMi, eksikNe, yoluCoz, ortamiTemizle, baglantiyiDene, ayarlar,
 };

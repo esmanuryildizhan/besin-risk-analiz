@@ -793,6 +793,42 @@ test('G64 16 yapılandırma kombinasyonunun hepsi doğru teşhis ediliyor', () =
 
 const EPOSTA_KALIBI = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
+// --- Ortam değeri temizliği (G69-G72) --------------------------------------
+//
+// Niye güvenlik testi: `.env` dosyasında tırnak kullanmak doğru, Render'da
+// yanlış — orada değer harfi harfine alınıyor ve tırnak değerin parçası
+// oluyor. Sonuç, Brevo'da `401 Key not found`: "anahtar yanlış" gibi görünen,
+// aslında "anahtarın etrafında tırnak var" olan bir hata. Posta durunca kimse
+// hesabını doğrulayamıyor ve kimse şifresini sıfırlayamıyor.
+
+test('G69 Çevresindeki tırnaklar soyuluyor (Render tuzağı)', () => {
+  esit(eposta.ortamiTemizle('"xkeysib-abc"').deger, 'xkeysib-abc', 'çift tırnak soyulmadı');
+  esit(eposta.ortamiTemizle("'xkeysib-abc'").deger, 'xkeysib-abc', 'tek tırnak soyulmadı');
+  dogru(eposta.ortamiTemizle('"xkeysib-abc"').tirnak, 'tırnak soyulduğu bildirilmedi');
+});
+
+test('G70 Baş/son boşluk kırpılıyor', () => {
+  esit(eposta.ortamiTemizle('  xkeysib-abc  ').deger, 'xkeysib-abc', 'boşluk kırpılmadı');
+  dogru(eposta.ortamiTemizle('  xkeysib-abc  ').bosluk, 'kırpma bildirilmedi');
+});
+
+test('G71 DÜZGÜN değer değiştirilmiyor', () => {
+  // Temizlik doğru değeri bozarsa, çalışan yapılandırmayı kırmış oluruz.
+  const r = eposta.ortamiTemizle('xkeysib-abc-123');
+  esit(r.deger, 'xkeysib-abc-123', 'düzgün değer değişti');
+  esit(r.tirnak, false, 'olmayan tırnak bildirildi');
+  esit(r.bosluk, false, 'olmayan boşluk bildirildi');
+});
+
+test('G72 Eşleşmeyen ve tek tırnak soyulmuyor', () => {
+  // '"abc' bir yarım tırnak; soyulursa değer sessizce bozulur.
+  esit(eposta.ortamiTemizle('"abc').deger, '"abc', 'yarım tırnak soyuldu');
+  esit(eposta.ortamiTemizle('abc"').deger, 'abc"', 'yarım tırnak soyuldu');
+  esit(eposta.ortamiTemizle('"').deger, '"', 'tek karakter soyuldu');
+  esit(eposta.ortamiTemizle('').deger, '', 'boş değer bozuldu');
+  esit(eposta.ortamiTemizle(undefined).deger, '', 'tanımsız değer bozuldu');
+});
+
 test('G65 Aydınlatma metni bir iletişim adresi İÇERİYOR (KVKK m.10/a)', () => {
   const bulunan = kvkk.AYDINLATMA.match(EPOSTA_KALIBI) || [];
   dogru(bulunan.length > 0, 'aydınlatma metninde hiç iletişim adresi yok');

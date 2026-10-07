@@ -2051,6 +2051,15 @@ app.listen(PORT, () => {
       ? 'Brevo HTTP API (443)'
       : `SMTP ${a.sunucu}:${a.port}`;
     console.log(`[POSTA] Hazır — ${nasil}, gönderen: ${a.gonderen}`);
+    if (a.temizlenenler.length) {
+      // Çalışıyor ama yapılandırma hatalı; sessiz kalırsa hiç düzelmez.
+      console.warn(
+        `[POSTA] DİKKAT: ${a.temizlenenler.join(', ')} değerinin etrafında `
+        + 'tırnak ya da boşluk vardı, kod bunu temizledi.\n'
+        + '[POSTA] Render ortam değişkenlerinde TIRNAK KULLANILMIYOR; '
+        + 'değeri tırnaksız yapıştırın.',
+      );
+    }
   } else {
     console.warn(
       `[POSTA] YAPILANDIRILMAMIŞ: ${eposta.eksikNe()}\n`
