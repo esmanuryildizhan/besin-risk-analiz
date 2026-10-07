@@ -51,7 +51,16 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
-app.use(cors());           // React (3000) başka porttan istek atacağı için gerekli
+// CORS — hangi adresten gelen isteği kabul ediyoruz?
+//
+// Yerelde React 3000'de, API 3001'de çalışıyor; tarayıcı bunları farklı köken
+// sayıyor, o yüzden izin şart. Yayında ise "herkese açık" bırakmak, başka bir
+// sitenin bu API'yi kendi arka ucu gibi kullanabilmesi demek olurdu.
+//
+// FRONTEND_URL tanımlıysa yalnızca o adres kabul edilir; tanımlı değilse
+// (yani yerelde) localhost:3000.
+const IZINLI_KOKEN = process.env.FRONTEND_URL || 'http://localhost:3000';
+app.use(cors({ origin: IZINLI_KOKEN, credentials: true }));
 app.use(express.json());   // gelen JSON gövdeyi otomatik çözer
 
 // ---------------------------------------------------------------------------

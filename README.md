@@ -1,97 +1,99 @@
 # Besin Risk Analiz Sistemi
 
-Kişinin hastalıklarına, alerjilerine ve kan tahlili sonuçlarına göre besinleri
-değerlendiren web uygulaması. Bir besin açılınca "sizin için UYGUN / DİKKAT /
-RİSKLİ" der ve **neden** öyle dediğini, hangi eşiğe ve hangi kaynağa
-dayandığıyla birlikte yazar.
+Besin Risk Analiz Sistemi, kullanıcının kronik rahatsızlıklarını, besin
+alerjilerini ve kan tahlili sonuçlarını dikkate alarak besinleri değerlendiren
+bir web uygulamasıdır. Her besin için UYGUN, DİKKAT, RİSKLİ, DİYET DIŞI veya
+ALERJEN seviyelerinden biri hesaplanır; sonucun hangi eşik değerine ve hangi
+kaynağa dayandığı kullanıcıya gösterilir.
 
-## Projenin kuralı
+## Yöntem
 
-> Hiçbir sayı uydurulmaz. Her eşik gerçek bir kaynağa dayanır ve o kaynak
-> kullanıcıya gösterilir. Bizim yaptığımız her çevrim "bize ait" diye
-> etiketlenir.
+Değerlendirme, kural tabanlı bir motor üzerinden yapılmaktadır. Sistemde
+11 hastalık için tanımlanmış **43 kural** ve bu kuralların dayandığı
+**31 kaynak künyesi** bulunmaktadır.
 
-Bu, projenin süsü değil mimarisi. Pratik sonuçları:
+Tüm eşik değerleri literatürdeki bilimsel yayınlardan ve ulusal/uluslararası
+kılavuzlardan alınmıştır. Her kaynak künyesi, değerin bulunduğu sayfa veya
+tablo numarasını içerir (örneğin "EFSA Journal 13(10):4254, özet s.1").
+Kaynak bilgisi olmayan bir eşik değerinin sisteme eklenmesi, otomatik testler
+tarafından engellenmektedir.
 
-- **43 kural, 31 kaynak künyesi, kaynaksız eşik yok.** Bir test bunu denetliyor:
-  kaynağı olmayan bir eşik eklenirse test patlar.
-- Kaynak künyeleri **sayfa/tablo numarası** taşır, yalnızca "EFSA 2015" değil
-  "EFSA Journal 13(10):4254, özet s.1".
-- Veri eksikse kural **sessiz kalmaz, DİKKAT der.** Kritik bir besin değeri
-  boş olan besin UYGUN sayılamaz.
-- Çıkarımın hangi **yönünün** sağlam olduğu her yerde ayrıca yazılı. Örnek:
-  TürKomp toplam trans yağı değil yalnızca elaidik asidi ölçüyor, yani
-  değerimiz bir **alt sınır** — kuralın tetiklenmesi haklı, sessiz kalması
-  "temiz" demek değil. Kural bu yüzden RİSKLİ değil DİKKAT veriyor.
+Kuralların tam listesi ve dayanakları [`KURAL_KAYNAKLARI.md`](KURAL_KAYNAKLARI.md)
+dosyasında yer almaktadır. Bu dosya `backend/prisma/belge_uret.js` tarafından
+üretilmektedir.
 
-Kuralların tam listesi ve dayanakları: [`KURAL_KAYNAKLARI.md`](KURAL_KAYNAKLARI.md)
-(`backend/prisma/belge_uret.js` üretiyor, elle düzenlenmez).
+## Özellikler
 
-## Ekranlar
-
-| Ekran | Ne yapar |
+| Ekran | İşlevi |
 |---|---|
-| **Besinler** | Besin arama, risk seviyesi, besin kartında gerekçeler ve kaynaklar |
-| **Günlük Takip** | Alınan/yakılan kalori, net kalori, su; takvimden geçmiş günler; porsiyon adedi |
-| **Tahlil Sonuçlarım** | e-Nabız PDF'i yükle → değerleri oku → onayla → kaydet; tarihler arası karşılaştırma |
-| **Profil** | Hastalıklar, alerjiler, diyet tercihi, günlük hedefler |
+| **Besinler** | Besin arama, risk seviyesi gösterimi, besin kartında gerekçeler ve kaynaklar |
+| **Günlük Takip** | Alınan ve yakılan kalori, net kalori, su tüketimi; takvim üzerinden geçmiş kayıtlara erişim; porsiyon adedi girişi |
+| **Tahlil Sonuçlarım** | e-Nabız PDF raporunun yüklenmesi, değerlerin okunması, kullanıcı onayıyla kaydedilmesi ve tarihler arası karşılaştırma |
+| **Profil** | Hastalık, alerji ve diyet tercihi yönetimi; günlük kalori ve su hedefleri |
 
-Tahlilde düşük çıkan bir değer varsa, ilgili besin ögesi besin kartında ayrı bir
-**"Tahlilinize göre"** bölümünde görünür. Bu bölüm risk seviyesini
-**değiştirmez** ve teşhis koymaz.
+Tahlil sonucunda laboratuvarın referans aralığının altında kalan bir değer
+bulunması hâlinde, ilgili besin ögesi besin kartında ayrı bir bölümde
+gösterilir. Bu bölüm risk seviyesini değiştirmez.
+
+Uygulama, 6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında aydınlatma
+metni ve açık rıza mekanizması içermektedir. Kullanıcılar hesaplarını ve tüm
+verilerini profil ekranından silebilmektedir.
 
 ## Veri kaynağı
 
-Besin değerlerinin tek kaynağı **[TürKomp](https://turkomp.tarimorman.gov.tr/)**
-(Ulusal Gıda Kompozisyon Veri Tabanı). **155 besin, tamamı TürKomp.**
-Her besnin TürKomp gıda kodu `data-import/turkomp_besinler.csv` içinde saklı;
-uygulamada besin kartında kaynak ve bağlantı gösteriliyor.
+Besin değerlerinin kaynağı **[TürKomp](https://turkomp.tarimorman.gov.tr/)**
+(Ulusal Gıda Kompozisyon Veri Tabanı v1.0) olup, veri tabanında 155 besin yer
+almaktadır. Her besnin TürKomp gıda kodu `data-import/turkomp_besinler.csv`
+dosyasında saklanmakta, kaynak bilgisi ve bağlantısı uygulama arayüzünde
+gösterilmektedir.
 
-TürKomp'un ölçmediği ve dışarıdan giren tek değer **kafein**
-(EFSA NDA Paneli 2015, Tablo 1, s.15). Gerekçesi ve her bir sayının nereden
-geldiği: `data-import/VERI_GIRISLERI.md`.
+Kafein değerleri, TürKomp bu bileşeni raporlamadığı için EFSA NDA Paneli
+(2015) *Scientific Opinion on the safety of caffeine* yayınının 15. sayfasında
+yer alan 1 numaralı tablodan alınmıştır. Veri girişlerine ilişkin ayrıntılı
+kayıt `data-import/VERI_GIRISLERI.md` dosyasında tutulmaktadır.
 
-### Bilinen veri boşlukları
+## Teknolojiler
 
-Dürüstlük gereği burada duruyor; hiçbiri uydurularak kapatılmadı:
+**Sunucu tarafı:** Node.js, Express 5, PostgreSQL, Prisma 5.22, pdfjs-dist 4.10,
+bcryptjs, jsonwebtoken
 
-- **Glisemik indeks hiçbir besinde yok.** Motor hazır (glisemik yük hesabı
-  yazılı), veri bekliyor. O yüzden diyabet tarafında net karbonhidrat üst sınır
-  olarak kullanılıyor.
-- **Trans yağ = elaidik asit**, yani alt sınır (yukarıda anlatıldı).
-- **51 besinde kritik bir değer boş** (şeker 32, doymuş yağ 27, sodyum 12).
-  Çoğu TürKomp’ta hiç ölçülmemiş — veri girerek kapanmaz.
-- **Doymamış yağ ölçümü 155 besnin 20’sinde var.** Ölçümü olmayan besin
-  muafiyet almıyor; oran tahmin edilmiyor.
+**İstemci tarafı:** React 18, Tailwind CSS, lucide-react
 
-Bir kuralın "veri bekliyor" olması testlerde körleştirilmiyor: C26 testi bir
-kuralı ancak dayandığı veri **tüm veri tabanında** boşsa muaf tutuyor. Veri
-girildiği an kural tetiklenmek zorunda, yoksa test patlıyor.
+**Veri hazırlama:** Python (standart kütüphane)
 
 ## Kurulum
 
-Gerekenler: **Node.js 18+**, **PostgreSQL**.
+Gereksinimler: Node.js 18 veya üzeri, PostgreSQL.
 
 ```bash
-git clone <depo-adresi>
+git clone https://github.com/esmanuryildizhan/besin-risk-analiz.git
 cd besin-risk-analiz
 ```
 
-### 1. Backend
+### 1. Sunucu tarafı
 
 ```bash
 cd backend
 npm install
 ```
 
-`backend/.env` dosyasını oluştur (depoya girmez):
+Ortam değişkenleri için örnek dosya kopyalanır:
+
+```bash
+cp .env.example .env        # Windows: copy .env.example .env
+```
+
+Oluşturulan `.env` dosyasında iki değer tanımlanmalıdır:
 
 ```
 DATABASE_URL="postgresql://kullanici:parola@localhost:5432/besin_risk"
 JWT_SECRET="uzun-ve-rastgele-bir-dize"
 ```
 
-Veritabanını kur ve doldur:
+Bu dosya veri tabanı parolası içerdiği için sürüm kontrolüne dâhil
+edilmemektedir.
+
+Veri tabanı şeması oluşturulur ve başlangıç verisi yüklenir:
 
 ```bash
 npx prisma migrate dev
@@ -99,96 +101,85 @@ npx prisma db seed
 npm start            # http://localhost:3001
 ```
 
-`db seed`, `data-import/foods_tr.csv` dosyasındaki besinleri ve
-`backend/prisma/hastalik_kurallari.js` içindeki kuralları veritabanına yazar.
+`db seed` komutu, `data-import/foods_tr.csv` dosyasındaki besinleri ve
+`backend/prisma/hastalik_kurallari.js` dosyasındaki kuralları veri tabanına
+yazar.
 
-### 2. Arayüz
+### 2. İstemci tarafı
 
-Yeni bir terminalde, proje kökünde:
+Proje kök dizininde, ayrı bir terminalde:
 
 ```bash
 npm install
 npm start            # http://localhost:3000
 ```
 
-API adresi mutlak (`localhost:3001`) ve CORS açık, yani arayüz başka bir porta
-düşse de çalışır.
+Arayüz, sunucuya `http://localhost:3001` adresi üzerinden erişir. Sunucu
+yalnızca `http://localhost:3000` adresinden gelen isteklerini kabul eder.
+Arayüz farklı bir portta çalıştırılacaksa `backend/.env` dosyasına
+`FRONTEND_URL` değişkeni eklenmelidir.
 
 ## Testler
 
 ```bash
 cd backend
-npm test             # node src/risk_test.js
+npm test
 ```
 
-**121 test.** Veritabanına bağlanmaz, tamamen bellekte çalışır. Besin değerleri
-testlere elle yazılmaz, `data-import/foods_tr.csv` dosyasından okunur — veri
-değişirse test de değişir, sessizce kaymaz.
+Projede **121 otomatik test** bulunmaktadır. Testler veri tabanına bağlanmaz,
+tamamen bellek üzerinde çalışır. Besin değerleri testlerin içine yazılmaz,
+`data-import/foods_tr.csv` dosyasından okunur; böylece veri değiştiğinde
+testler de güncel veriyle çalışır.
 
-Gruplar: 61 nokta testi, A (veri bütünlüğü), B (kural künyeleri), C (motor
-mekaniği). Ayrıntı: `claude/test-mimarisi.md`.
-
-## Teknolojiler
-
-**Backend:** Node.js, Express 5, PostgreSQL, Prisma 5.22 (bilerek sabitlendi),
-pdfjs-dist 4.10 (e-Nabız PDF ayrıştırma), bcryptjs, jsonwebtoken
-**Arayüz:** React 18, Tailwind CSS, lucide-react
-**Veri hazırlama:** Python (yalnızca standart kütüphane)
+Testler dört grupta toplanmıştır: 61 nokta testi, veri bütünlüğü testleri (A),
+kural meta-verisi testleri (B) ve motor mekaniği testleri (C).
 
 ## Proje yapısı
 
 ```
 backend/
   src/
-    index.js            # Express API (22 uç nokta)
-    risk.js             # Risk motoru — kuralları besne uygular
-    kural_cevir.js      # Veritabanı satırı <-> motor kuralı çevirisi (tek yer)
-    tahlil_ayristir.js  # e-Nabız PDF'ini koordinat tabanlı okur
-    risk_test.js        # 121 test
+    index.js               Express API (22 uç nokta)
+    risk.js                Risk motoru
+    kural_cevir.js         Veri tabanı satırı ile motor kuralı arasındaki çeviri
+    tahlil_ayristir.js     e-Nabız PDF ayrıştırıcısı
+    kvkk_metinleri.js      Aydınlatma ve açık rıza metinleri
+    risk_test.js           121 test
   prisma/
-    schema.prisma       # 9 model
-    hastalik_kurallari.js  # Kurallar ve kaynak künyeleri — verinin kendisi
-    seed.js             # CSV + kurallar -> veritabanı
-    belge_uret.js       # KURAL_KAYNAKLARI.md üretir
-    kural_denetle.js    # Veritabanı kuralları dosyayla uyuşuyor mu (salt okunur)
-    besin_denetle.js    # Tek bir besni her hastalık için değerlendirir
+    schema.prisma          Veri tabanı şeması (9 model)
+    hastalik_kurallari.js  Kurallar ve kaynak künyeleri
+    seed.js                Başlangıç verisini yükler
+    belge_uret.js          KURAL_KAYNAKLARI.md dosyasını üretir
+    kural_denetle.js       Veri tabanı ile kural dosyasını karşılaştırır
+    besin_denetle.js       Tek bir besni tüm hastalıklar için değerlendirir
 data-import/
-  turkomp_besinler.csv  # Ham TürKomp verisi (gıda kodlarıyla)
-  turkomp_birlestir.py  # Ana betik -> foods_tr.csv
-  bos_hucre_doldur.py   # Yapıştırılan sayfalardan BOŞ hücreleri doldurur
-  yapilacaklar_uret.py  # YAPILACAKLAR.md üretir
-  foods_tr.csv          # Uygulamanın okuduğu besin tablosu
+  turkomp_besinler.csv     Kaynak veri (TürKomp gıda kodlarıyla)
+  turkomp_birlestir.py     Ana veri hazırlama betiği
+  bos_hucre_doldur.py      TürKomp sayfalarından eksik değerleri tamamlar
+  yapilacaklar_uret.py     Eksik veri listesini üretir
+  foods_tr.csv             Uygulamanın kullandığı besin tablosu
 src/
-  App.js                # Kök: oturum, yönlendirme, KVKK onay kapısı (61 satır)
-  api.js                # Backend ile konuşan tek dosya
-  components/
-    ortak.js            # Modal, SecimKutusu, HataKutusu, risk stilleri
-    Sidebar.js
-  screens/
-    LoginScreen.js
-    RegisterScreen.js
-    BesinlerScreen.js   # arama, besin kartı, besin detayı
-    DiaryScreen.js      # günlük kalori, su, takvim
-    LabResultsScreen.js # PDF yükleme, karşılaştırma, öneriler
-    ProfileScreen.js
-  kvkk/
-    KvkkBilesenleri.js  # aydınlatma/açık rıza arayüzü, hesap silme
+  App.js                   Oturum yönetimi ve yönlendirme
+  api.js                   Sunucu iletişimi
+  components/              Paylaşılan bileşenler ve sol menü
+  screens/                 Ekranlar
+  kvkk/                    KVKK aydınlatma, açık rıza ve hesap silme arayüzü
 ```
 
-## Mimari notu — kurallar veri, kod değil
+## Mimari
 
-Hastalık kuralları `hastalik_kurallari.js` içinde **veri** olarak duruyor,
-oradan veritabanına yazılıyor, API önbelleğe alıyor, `risk.js` çalıştırıyor.
-Yeni bir kural eklemek için motora dokunmak gerekmiyor — eşiği, seviyeyi ve
-kaynağını yazmak yeterli.
+Hastalık kuralları koda gömülü değildir; `hastalik_kurallari.js` dosyasında
+veri olarak tanımlanır, buradan veri tabanına aktarılır ve `risk.js` tarafından
+çalıştırılır. Yeni bir kural eklenmesi için motorun değiştirilmesi gerekmez;
+eşik değerinin, seviyenin ve kaynağın tanımlanması yeterlidir.
 
-Motorun bildiği türetilmiş değerler (`risk.js`): net karbonhidrat, 1000 kcal
-başına lif, doymuş yağın enerjiye oranı, doymamış yağ oranı, glisemik yük,
-EPA+DHA.
+Motor, ham besin değerlerinin yanı sıra türetilmiş değerleri de hesaplar:
+net karbonhidrat, 1000 kcal başına lif miktarı, doymuş yağın enerjiye oranı,
+doymamış yağ oranı, glisemik yük ve EPA+DHA miktarı.
 
-## Uyarı
+## Yasal uyarı
 
-Bu uygulama bilgilendirme amaçlıdır. **Tıbbi tanı veya tedavi yerine geçmez.**
-Tahlil ekranı sonuçlarınızı laboratuvarınızın kendi referans aralığına göre
-gösterir, teşhis koymaz ve hastalık profilinizi değiştirmez. Sağlık
-sorunlarınız için hekiminize başvurun.
+Bu uygulama bilgilendirme amaçlıdır ve tıbbi tanı veya tedavi yerine geçmez.
+Tahlil ekranı, sonuçları yalnızca raporu düzenleyen laboratuvarın kendi
+referans aralığına göre gösterir; teşhis koymaz. Sağlık sorunlarınız için
+hekiminize başvurunuz.

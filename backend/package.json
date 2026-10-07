@@ -8,9 +8,12 @@
     "dev": "node src/index.js",
     "test": "node src/risk_test.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
@@ -25,7 +28,7 @@
   "devDependencies": {
     "prisma": "^5.22.0"
   },
-  "prisma": {
-    "seed": "node prisma/seed.js"
-  }
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
