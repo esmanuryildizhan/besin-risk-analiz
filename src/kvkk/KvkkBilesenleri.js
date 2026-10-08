@@ -9,7 +9,7 @@ import {
   Loader2, ShieldAlert,
 } from 'lucide-react';
 import { api, tokenKaydet, verileriniIndir } from '../api';
-import { HataKutusu, Modal, Yukleniyor } from '../components/ortak';
+import { HataKutusu, Modal, OnayKutusu, Yukleniyor } from '../components/ortak';
 
 /** Metinlerdeki **kalın** işaretlerini gerçek kalına çevirir. */
 const kalinYap = (metin) =>
@@ -298,8 +298,10 @@ export const HesapSilme = ({ onSilindi }) => {
   const [sifre, setSifre] = useState('');
   const [hata, setHata] = useState('');
   const [bekliyor, setBekliyor] = useState(false);
+  const [onayAcik, setOnayAcik] = useState(false);
 
   const sil = async () => {
+    setOnayAcik(false);
     setBekliyor(true); setHata('');
     try {
       await api.hesabiSil(sifre);
@@ -335,8 +337,8 @@ export const HesapSilme = ({ onSilindi }) => {
             className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-red-400" />
           <HataKutusu mesaj={hata} />
           <div className="flex flex-wrap gap-3">
-            <button onClick={sil} disabled={bekliyor || !sifre}
-              className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-xl transition flex items-center gap-2 disabled:opacity-40">
+            <button onClick={() => setOnayAcik(true)} disabled={bekliyor || !sifre}
+              className="bg-red-700 hover:bg-red-800 text-white font-bold px-6 py-3 rounded-xl transition flex items-center gap-2 disabled:opacity-40">
               {bekliyor ? <Loader2 className="animate-spin" size={18} /> : <X size={18} />}
               Evet, kalıcı olarak sil
             </button>
@@ -347,6 +349,37 @@ export const HesapSilme = ({ onSilindi }) => {
           </div>
         </div>
       )}
+
+      {/* SON ONAY. Parola alanı tek başına yeterli bir engel değil: kullanıcı
+          parolasını yazıp düğmeye refleksle basabilir. Burada NE KAYBEDECEĞİ
+          tek tek yazılıyor ve kutu "Vazgeç" odaklı açılıyor. */}
+      <OnayKutusu
+        acik={onayAcik}
+        tehlikeli
+        baslik="Hesabınız ve tüm verileriniz kalıcı olarak silinecek"
+        aciklama={(
+          <>
+            <p className="mb-3">Silinecekler:</p>
+            <ul className="list-disc pl-5 space-y-1 mb-3">
+              <li>Hesabınız ve giriş bilgileriniz</li>
+              <li>Hastalık ve besin alerjisi bilgileriniz</li>
+              <li>Yüklediğiniz tahlil sonuçlarının tamamı</li>
+              <li>Günlük takip kayıtlarınız</li>
+            </ul>
+            <p className="font-bold text-red-700">
+              Bu işlem geri alınamaz. Verilerin bir kopyası saklanmaz.
+            </p>
+            <p className="mt-3 text-gray-600">
+              Önce verilerinizi indirmek isterseniz bu kutuyu kapatıp
+              &quot;Verilerimi indir&quot; bölümünü kullanabilirsiniz.
+            </p>
+          </>
+        )}
+        onayYazisi="Evet, kalıcı olarak sil"
+        onOnay={sil}
+        onIptal={() => setOnayAcik(false)}
+        bekliyor={bekliyor}
+      />
     </div>
   );
 };

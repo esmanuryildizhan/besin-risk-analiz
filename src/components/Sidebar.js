@@ -19,11 +19,11 @@
 
 import React, { useEffect, useRef } from 'react';
 import {
-  Search, Calendar, X, Settings, Activity, Menu,
+  Search, Calendar, X, Settings, Activity, Menu, HelpCircle,
 } from 'lucide-react';
 import { MenuButton } from './ortak';
 
-export const Sidebar = ({ aktif, git, user, cikisYap, acik, setAcik }) => {
+export const Sidebar = ({ aktif, git, user, cikisYap, acik, setAcik, onTanitim }) => {
   const cekmeceRef = useRef(null);
 
   // Escape ile kapat. Yalnızca açıkken dinleniyor.
@@ -99,6 +99,10 @@ export const Sidebar = ({ aktif, git, user, cikisYap, acik, setAcik }) => {
         </nav>
 
         <div className="px-4 pb-6 pt-4 border-t border-gray-100 space-y-2">
+          <MenuButton
+            icon={HelpCircle} label="Nasıl kullanılır?" isActive={false}
+            onClick={() => { onTanitim(); setAcik(false); }} isSecondary
+          />
           <MenuButton icon={Settings} label="Profil Ayarları" isActive={aktif === 'profile'} onClick={() => gitVeKapat('profile')} isSecondary />
           <button onClick={cikisYap} className="flex items-center gap-3 text-gray-600 hover:bg-red-50 hover:text-red-700 transition w-full px-5 py-3.5 rounded-xl text-sm font-bold">
             <X size={20} aria-hidden="true" /> <span>Oturumu Kapat</span>

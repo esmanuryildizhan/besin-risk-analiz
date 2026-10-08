@@ -2,7 +2,7 @@
 //
 // Birden çok ekranın kullandığı küçük bileşenler ve risk seviyesi stilleri.
 
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { KURALLAR } from '../parolaKurali';
 import {
   Search, AlertCircle, AlertTriangle, X, CheckCircle, Utensils,
@@ -200,3 +200,93 @@ export const ParolaKurallari = ({ parola }) => (
     })}
   </ul>
 );
+
+/**
+ * Geri alınamaz işlemler için onay kutusu.
+ *
+ * NİYE window.confirm DEĞİL: tarayıcının kendi kutusu biçimlendirilemiyor,
+ * ne yapılacağını ayrıntılı anlatamıyor ve mobilde "site şunu diyor:" diye
+ * yabancı bir kabukla çıkıyor. Ayrıca bazı tarayıcılar art arda açılan
+ * confirm'leri engelleyebiliyor.
+ *
+ * ERİŞİLEBİLİRLİK:
+ *  - role="dialog" + aria-modal: ekran okuyucu arkadaki içeriği değil
+ *    kutuyu okuyor.
+ *  - Açılınca odak ONAY düğmesine değil İPTAL'e gidiyor: yanlışlıkla Enter'a
+ *    basan biri yıkıcı işlemi tetiklememeli.
+ *  - Escape kapatıyor, arka plana tıklamak da.
+ *  - Odak kutunun içinde dönüyor (Tab tuzağı); yoksa klavye kullanıcısı
+ *    arkadaki forma düşer ve kutunun kapandığını sanır.
+ */
+export const OnayKutusu = ({
+  acik, baslik, aciklama, onayYazisi = 'Onayla', tehlikeli = false,
+  onOnay, onIptal, bekliyor = false,
+}) => {
+  const kutuRef = useRef(null);
+  const iptalRef = useRef(null);
+
+  useEffect(() => {
+    if (!acik) return undefined;
+    if (iptalRef.current) iptalRef.current.focus();
+    const tus = (e) => {
+      if (e.key === 'Escape') { onIptal(); return; }
+      if (e.key !== 'Tab' || !kutuRef.current) return;
+      const odaklanabilir = kutuRef.current.querySelectorAll('button:not([disabled])');
+      if (!odaklanabilir.length) return;
+      const ilk = odaklanabilir[0];
+      const son = odaklanabilir[odaklanabilir.length - 1];
+      if (e.shiftKey && document.activeElement === ilk) { e.preventDefault(); son.focus(); }
+      else if (!e.shiftKey && document.activeElement === son) { e.preventDefault(); ilk.focus(); }
+    };
+    document.addEventListener('keydown', tus);
+    return () => document.removeEventListener('keydown', tus);
+  }, [acik, onIptal]);
+
+  if (!acik) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onIptal(); }}
+      role="presentation"
+    >
+      <div
+        ref={kutuRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onay-baslik"
+        aria-describedby="onay-aciklama"
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-7"
+      >
+        <div className="flex items-start gap-4 mb-4">
+          <div className={`p-3 rounded-2xl shrink-0 ${tehlikeli ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+            <AlertTriangle size={22} aria-hidden="true" />
+          </div>
+          <h3 id="onay-baslik" className="text-lg font-bold text-gray-800 mt-1">{baslik}</h3>
+        </div>
+        <div id="onay-aciklama" className="text-sm text-gray-700 leading-relaxed mb-7">{aciklama}</div>
+        <div className="flex gap-3 justify-end">
+          <button
+            ref={iptalRef}
+            type="button"
+            onClick={onIptal}
+            disabled={bekliyor}
+            className="px-5 py-3 rounded-xl font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-50"
+          >
+            Vazgeç
+          </button>
+          <button
+            type="button"
+            onClick={onOnay}
+            disabled={bekliyor}
+            className={`px-5 py-3 rounded-xl font-bold text-white transition disabled:opacity-50 flex items-center gap-2
+              ${tehlikeli ? 'bg-red-700 hover:bg-red-800' : 'bg-green-700 hover:bg-green-800'}`}
+          >
+            {bekliyor && <Loader2 className="animate-spin" size={18} aria-hidden="true" />}
+            {onayYazisi}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

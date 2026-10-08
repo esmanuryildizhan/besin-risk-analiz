@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { api, tokenAl, tokenKaydet } from './api';
 import { Sidebar } from './components/Sidebar';
 import { Yukleniyor } from './components/ortak';
+import { Tanitim, tanitimGoruldu, tanitimiIsaretle } from './components/Rehber';
 import { OnayEkrani } from './kvkk/KvkkBilesenleri';
 import { DashboardScreen } from './screens/BesinlerScreen';
 import { DiaryScreen } from './screens/DiaryScreen';
@@ -23,9 +24,20 @@ export default function App() {
   // Mobil yan menünün açık/kapalı durumu. Masaüstünde (lg ve üstü) menü
   // zaten sabit duruyor; bu değer yalnızca küçük ekranlarda iş görüyor.
   const [menuAcik, setMenuAcik] = useState(false);
+  // Tanıtım ilk girişte kendiliğinden açılıyor, sonra yan menüden
+  // istendiği zaman tekrar açılabiliyor.
+  const [tanitimAcik, setTanitimAcik] = useState(false);
+
   const [user, setUser] = useState(null);
   const [meta, setMeta] = useState({});
   const [hazir, setHazir] = useState(false);
+
+  // Kullanıcı içeri girdiğinde ve tanıtımı daha önce görmediyse bir kez açılır.
+  // Onay (KVKK) ekranı beklerken açılmıyor: iki kutu üst üste gelirse
+  // hangisinin ne olduğu anlaşılmaz.
+  useEffect(() => {
+    if (user && !user.onayGerekli && !tanitimGoruldu()) setTanitimAcik(true);
+  }, [user]);
 
   // ŞİFRE SIFIRLAMA BAĞLANTISI
   //
@@ -127,6 +139,11 @@ export default function App() {
       <Sidebar
         aktif={ekran} git={setEkran} user={user} cikisYap={cikisYap}
         acik={menuAcik} setAcik={setMenuAcik}
+        onTanitim={() => setTanitimAcik(true)}
+      />
+      <Tanitim
+        acik={tanitimAcik}
+        onKapat={() => { setTanitimAcik(false); tanitimiIsaretle(); }}
       />
       {/* pt-14: mobildeki sabit üst çubuğun yüksekliği kadar boşluk.
           lg'de üst çubuk yok, boşluk da sıfırlanıyor. */}

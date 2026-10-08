@@ -2,16 +2,16 @@
 //
 // Profil, günlük hedefler ve hesap silme.
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-  Activity, CheckCircle, Clock, Info, KeyRound, Loader2, Monitor, Moon, Palette,
-  Save, Shield, Sun, User,
+  Activity, CheckCircle, ChevronDown, Clock, Info, KeyRound, Loader2, Monitor,
+  Moon, Palette, Save, Shield, Sun, User,
 } from 'lucide-react';
 import { api, tokenKaydet } from '../api';
 import { HataKutusu, SecimKutusu } from '../components/ortak';
 import { HesapSilme, VeriIndirme } from '../kvkk/KvkkBilesenleri';
 import { kayitliTema, temayiSec } from '../tema';
-import { ParolaKurallari } from '../components/ortak';
+import { OnayKutusu, ParolaKurallari } from '../components/ortak';
 import { tumKurallarTamamMi } from '../parolaKurali';
 
 /**
@@ -34,12 +34,20 @@ const ParolaDegistirme = () => {
   const [bekliyor, setBekliyor] = useState(false);
   const [hata, setHata] = useState('');
   const [tamam, setTamam] = useState('');
+  const [onayAcik, setOnayAcik] = useState(false);
 
-  const gonder = async () => {
+  /** Önce doğrula, sonra onay sor. Sıra böyle: kullanıcıya önce "emin misin"
+   *  deyip sonra "parolan kurala uymuyor" demek gereksiz bir adım olurdu. */
+  const onayIste = () => {
     setHata(''); setTamam('');
     if (yeni !== tekrar) { setHata('İki parola birbiriyle aynı değil.'); return; }
     if (!tumKurallarTamamMi(yeni)) { setHata('Yeni parola aşağıdaki kuralların tümünü karşılamalı.'); return; }
     if (yeni === mevcut) { setHata('Yeni parola eskisiyle aynı olamaz.'); return; }
+    setOnayAcik(true);
+  };
+
+  const gonder = async () => {
+    setOnayAcik(false);
     setBekliyor(true);
     try {
       const c = await api.parolaDegistir(mevcut, yeni, kodGerekli ? kod : undefined);
@@ -106,8 +114,27 @@ const ParolaDegistirme = () => {
           </p>
         )}
 
+        <OnayKutusu
+          acik={onayAcik}
+          baslik="Parolanızı değiştirmek istediğinize emin misiniz?"
+          aciklama={(
+            <>
+              <p className="mb-3">Yeni parolanızla giriş yapacaksınız.</p>
+              <p>
+                <strong>Diğer cihazlardaki açık oturumlar kapatılacak.</strong>{' '}
+                Telefonunuzda ya da başka bir tarayıcıda açık oturumunuz varsa
+                yeniden giriş yapmanız gerekecek.
+              </p>
+            </>
+          )}
+          onayYazisi="Parolayı değiştir"
+          onOnay={gonder}
+          onIptal={() => setOnayAcik(false)}
+          bekliyor={bekliyor}
+        />
+
         <button
-          onClick={gonder}
+          onClick={onayIste}
           disabled={bekliyor || !mevcut || !yeni || !tekrar}
           className="bg-green-700 hover:bg-green-800 text-white font-bold px-6 py-3 rounded-xl transition disabled:opacity-40 flex items-center gap-2"
         >
@@ -359,6 +386,13 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
   );
 };
 
+const SEKMELER = [
+  { kod: 'profil', ad: 'Profil', ikon: User },
+  { kod: 'guvenlik', ad: 'Güvenlik', ikon: Shield },
+  { kod: 'gorunum', ad: 'Görünüm', ikon: Palette },
+  { kod: 'veriler', ad: 'Verilerim', ikon: Clock },
+];
+
 export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
   const [form, setForm] = useState({
     name: user.name || '', surname: user.surname || '',
@@ -372,6 +406,13 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
   const [mesaj, setMesaj] = useState('');
   const [hata, setHata] = useState('');
   const [bekliyor, setBekliyor] = useState(false);
+  // Profil ekranı sekiz karta çıkmıştı: hepsi alt alta dizilince hem
+  // bulunması zor hem de kaydırması uzun bir sayfa oluyordu. Sekmeler
+  // ayrıca hizalama sorununu da çözüyor — eskiden ilk iki kart bir ızgara
+  // içindeydi, kalanlar ızgaranın DIŞINDA ve aralarında boşluk yoktu, o
+  // yüzden bazıları bitişik görünüyordu.
+  const [sekme, setSekme] = useState('profil');
+  const sekmeRef = useRef([]);
 
   const kaydet = async () => {
     setBekliyor(true); setHata(''); setMesaj('');
@@ -402,10 +443,58 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-800">Profil Ayarları</h1>
           <p className="text-gray-500 mt-2">Sağlık profiliniz, besinlerin nasıl değerlendirileceğini belirler.</p>
         </div>
-        <button onClick={kaydet} disabled={bekliyor} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold flex items-center gap-2 transition disabled:opacity-60">
-          {bekliyor ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />} Değişiklikleri Kaydet
-        </button>
+        {/* Kaydet yalnızca Profil sekmesinde: diğer sekmelerdeki ayarlar
+            (tema, parola, 2FA) kendi düğmeleriyle anında kaydediliyor.
+            Her sekmede görünseydi hangi değişikliği kaydettiği belirsiz olurdu. */}
+        {sekme === 'profil' && (
+          <button onClick={kaydet} disabled={bekliyor} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold flex items-center gap-2 transition disabled:opacity-60">
+            {bekliyor ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />} Değişiklikleri Kaydet
+          </button>
+        )}
       </header>
+
+      {/* SEKME ÇUBUĞU — ARIA sekme deseni.
+          role="tablist" + aria-selected ekran okuyucuya "4 sekmeden 2.si,
+          seçili" diye duyuruyor. Ok tuşlarıyla gezinme de desenin parçası;
+          onsuz klavye kullanıcısı her sekmeye ayrı ayrı Tab'lamak zorunda
+          kalır. Yalnızca seçili sekme Tab sırasında (roving tabindex). */}
+      <div
+        role="tablist"
+        aria-label="Profil bölümleri"
+        className="flex gap-1 mb-8 border-b border-gray-200 overflow-x-auto"
+      >
+        {SEKMELER.map((sk, i) => {
+          const secili = sekme === sk.kod;
+          return (
+            <button
+              key={sk.kod}
+              ref={(el) => { sekmeRef.current[i] = el; }}
+              role="tab"
+              id={`sekme-${sk.kod}`}
+              aria-selected={secili}
+              aria-controls={`panel-${sk.kod}`}
+              tabIndex={secili ? 0 : -1}
+              onClick={() => setSekme(sk.kod)}
+              onKeyDown={(e) => {
+                const yon = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+                if (!yon) return;
+                e.preventDefault();
+                const sonraki = (i + yon + SEKMELER.length) % SEKMELER.length;
+                setSekme(SEKMELER[sonraki].kod);
+                if (sekmeRef.current[sonraki]) sekmeRef.current[sonraki].focus();
+              }}
+              className={`flex items-center gap-2 px-5 py-3 font-bold text-sm whitespace-nowrap border-b-2 -mb-px transition
+                focus:outline-none focus:ring-2 focus:ring-green-500 rounded-t-lg
+                ${secili
+                  ? 'border-green-700 text-green-700'
+                  : 'border-transparent text-gray-600 hover:text-gray-800 hover:border-gray-300'}`}
+            >
+              <sk.ikon size={18} aria-hidden="true" />
+              {sk.ad}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="space-y-4 mb-6">
         <HataKutusu mesaj={hata} />
@@ -416,6 +505,7 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
         )}
       </div>
 
+      <div role="tabpanel" id="panel-profil" aria-labelledby="sekme-profil" hidden={sekme !== 'profil'}>
       <div className="grid lg:grid-cols-2 gap-8">
         <div className="bg-white rounded-3xl border border-gray-200 p-8">
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
@@ -445,7 +535,7 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
                 Günlük Takip ekranındaki halkalar bu hedeflere göre doluyor.
                 Boş bırakırsanız varsayılan (2000 kcal / 2 L) kullanılır ve ekranda
                 bunun sizin hedefiniz olmadığı belirtilir.
-                <strong className="text-gray-500"> Bu bir sağlık tavsiyesi değildir</strong> —
+                <strong className="text-gray-500"> Bu bir sağlık tavsiyesi değildir</strong>,
                 hedefi siz belirlersiniz.
               </p>
               <div className="grid grid-cols-2 gap-4">
@@ -484,9 +574,6 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
               <select id="profil-diyet" value={form.diet} onChange={(e) => setForm({ ...form, diet: e.target.value })} className="w-full p-4 bg-gray-50 border rounded-xl outline-none focus:border-green-500 text-gray-700">
                 {(meta.diets || ['Normal']).map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
-              <p className="text-xs text-gray-500 mt-2">
-                Diyetinize uymayan besinler mor "DİYETİNİZE UYGUN DEĞİL" etiketiyle gösterilir.
-              </p>
             </div>
             <SecimKutusu
               label="Kronik Rahatsızlıklar" secenekler={meta.diseases || []} secili={hastaliklar}
@@ -512,12 +599,23 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
           </div>
         </div>
       )}
+      </div>
 
-      <GorunumAyari />
+      <div role="tabpanel" id="panel-guvenlik" aria-labelledby="sekme-guvenlik" hidden={sekme !== 'guvenlik'}>
+        <div className="space-y-8">
+          <ParolaDegistirme />
+          <IkiAsamaliDogrulama user={user} onGuncelle={onGuncelle} />
+        </div>
+      </div>
 
-      <ParolaDegistirme />
+      <div role="tabpanel" id="panel-gorunum" aria-labelledby="sekme-gorunum" hidden={sekme !== 'gorunum'}>
+        <div className="space-y-8">
+          <GorunumAyari />
+        </div>
+      </div>
 
-      <IkiAsamaliDogrulama user={user} onGuncelle={onGuncelle} />
+      <div role="tabpanel" id="panel-veriler" aria-labelledby="sekme-veriler" hidden={sekme !== 'veriler'}>
+        <div className="space-y-8">
 
       {/* SAKLAMA SÜRESİ GÖRÜNÜR OLMALI.
           Aydınlatma metninde yazıyor ama onu kayıt sırasında bir kez okuyup
@@ -525,11 +623,20 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
           istiyor; kullanıcının bu süreyi İSTEDİĞİ AN görebilmesi, hakkını
           kullanabilmesinin ön şartı. Sayılar sunucudaki ayarla aynı
           (backend/src/saklama.js ve guvenlik_gunlugu.js). */}
-      <div className="bg-white rounded-3xl border border-gray-200 p-8">
-        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
-          <div className="bg-sky-100 p-3 rounded-2xl text-sky-800"><Clock size={22} /></div> Verileriniz Ne Kadar Saklanıyor
-        </h2>
-        <ul className="space-y-3 text-sm text-gray-700">
+      {/* Katlanır: bilgi önemli ama her açılışta dört maddelik bir blok
+          olarak durması gereksiz yer kaplıyordu. <details> kullanıldı,
+          elle yazılmış bir aç/kapa yerine: klavye ve ekran okuyucu desteği
+          tarayıcıdan geliyor, "genişletildi/daraltıldı" durumu kendiliğinden
+          duyuruluyor. */}
+      <details className="bg-white rounded-3xl border border-gray-200 group">
+        <summary className="p-8 cursor-pointer list-none flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3">
+            <div className="bg-sky-100 p-3 rounded-2xl text-sky-800"><Clock size={22} /></div>
+            Verileriniz Ne Kadar Saklanıyor
+          </h2>
+          <ChevronDown size={22} className="text-gray-500 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <ul className="space-y-3 text-sm text-gray-700 px-8 pb-8">
           <li className="flex gap-3">
             <span className="text-sky-700 font-bold shrink-0">•</span>
             <span>
@@ -561,11 +668,13 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
             </span>
           </li>
         </ul>
+      </details>
+
+          <VeriIndirme />
+
+          <HesapSilme onSilindi={onSilindi} />
+        </div>
       </div>
-
-      <VeriIndirme />
-
-      <HesapSilme onSilindi={onSilindi} />
     </div>
   );
 };

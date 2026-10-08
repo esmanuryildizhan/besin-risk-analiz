@@ -135,7 +135,7 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
             <Apple size={48} className="text-green-700" />
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Hoş Geldiniz</h1>
-          <p className="text-gray-500 text-center">Kişiselleştirilmiş besin risk analizi sistemi</p>
+          <p className="text-gray-500 text-center">Kişiselleştirilmiş Besin Risk Analizi</p>
         </div>
 
         <div className="space-y-6">

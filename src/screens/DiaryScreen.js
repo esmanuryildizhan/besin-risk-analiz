@@ -168,14 +168,18 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
 
       {/* Besin seçerek ekleme */}
       <div className="relative">
-        <div className="flex items-center gap-2 border rounded-xl px-3 focus-within:border-green-500 transition">
+        {/* min-w-0: flex ögeleri varsayılan olarak min-width:auto taşır, yani
+            içeriklerinin (burada yer tutucu metnin) altına KÜÇÜLEMEZLER ve
+            satırı taşırırlar. Dar ekranda günlük takibin yarım görünmesinin
+            sebebi buydu. */}
+        <div className="flex items-center gap-2 border rounded-xl px-3 focus-within:border-green-500 transition min-w-0">
           <Search size={18} className="text-gray-500 shrink-0" />
           <input
             value={arama}
             onChange={(e) => setArama(e.target.value)}
             placeholder="Besin ara (ör. yoğurt) — veya aşağıdan kalori gir"
             aria-label="Besin ara"
-            className="p-3 outline-none text-sm w-full bg-transparent rounded-lg focus:ring-2 focus:ring-green-500 focus:ring-inset"
+            className="p-3 outline-none text-sm w-full min-w-0 bg-transparent rounded-lg focus:ring-2 focus:ring-green-500 focus:ring-inset"
           />
           {araniyor && <Loader2 size={16} className="animate-spin text-gray-500 shrink-0" />}
           <span className="flex items-center gap-1 shrink-0 border-l pl-3">
@@ -217,12 +221,13 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
       </div>
 
       {/* Serbest kalori girişi */}
-      <div className="flex items-center gap-2 mt-3">
+      <div className="flex items-center gap-2 mt-3 flex-wrap sm:flex-nowrap">
         <input
           value={serbestAd}
           onChange={(e) => setSerbestAd(e.target.value)}
           placeholder="Yemeğin adı (isteğe bağlı)"
-          className="p-3 border rounded-xl outline-none text-sm flex-1 focus:border-green-500 transition"
+          aria-label="Yemeğin adı"
+          className="p-3 border rounded-xl outline-none text-sm flex-1 min-w-0 basis-full sm:basis-auto focus:border-green-500 transition"
         />
         <input
           type="number" min="1"
@@ -230,7 +235,8 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
           onChange={(e) => setSerbestKcal(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && serbestEkle()}
           placeholder="kalori"
-          className="p-3 border rounded-xl outline-none text-sm w-28 focus:border-green-500 transition"
+          aria-label="Kalori"
+          className="p-3 border rounded-xl outline-none text-sm w-24 sm:w-28 shrink-0 focus:border-green-500 transition"
         />
         <button
           onClick={serbestEkle} disabled={kilitli || !(Number(serbestKcal) > 0)}
