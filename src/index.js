@@ -11,6 +11,18 @@ import { uygula, sistemiIzle } from './tema';
 uygula();
 sistemiIzle();
 
+// SERVICE WORKER — yalnızca kurulabilirlik için (public/sw.js hiçbir şey
+// önbelleğe almıyor). Kayıt sayfa yüklendikten SONRA yapılıyor: ilk açılışta
+// ana iş parçacığıyla yarışmasın.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Kayıt başarısızsa uygulama normal çalışmaya devam ediyor; tek kayıp
+      // tarayıcının kurulum isteminin çıkmaması.
+    });
+  });
+}
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>

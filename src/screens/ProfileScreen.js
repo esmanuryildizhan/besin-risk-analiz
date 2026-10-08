@@ -13,6 +13,7 @@ import { HesapSilme, VeriIndirme } from '../kvkk/KvkkBilesenleri';
 import { kayitliTema, temayiSec } from '../tema';
 import { OnayKutusu, ParolaKurallari } from '../components/ortak';
 import { AVATARLAR, Avatar } from '../components/Avatarlar';
+import { UygulamayiYukle } from '../components/Yukle';
 import { tumKurallarTamamMi } from '../parolaKurali';
 
 /**
@@ -354,6 +355,57 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
 
       <HataKutusu mesaj={hata} />
 
+      {/* KURULUM REHBERİ — açmadan ÖNCE.
+          "İki aşamalı doğrulama" ne olduğunu bilmeyen için soyut bir terim;
+          doğrulayıcı uygulama kavramı da öyle. Kurulum ekranında anlatmak
+          geç oluyor, çünkü kullanıcı düğmeye basmaya o noktada zaten karar
+          vermiş olmak zorunda kalıyor. <details> kullanıldı: isteyen açar,
+          bilen hiç görmez. */}
+      {!user.totpEnabled && (
+        <details className="mt-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
+          <summary className="px-5 py-3 cursor-pointer font-bold text-gray-700 select-none">
+            Nasıl kurulur? (2 dakika)
+          </summary>
+          <div className="px-5 pb-5 space-y-4 text-gray-700 leading-relaxed">
+            <p>
+              İki aşamalı doğrulama, girişte parolanıza ek olarak telefonunuzdaki
+              bir uygulamanın ürettiği <strong>6 haneli kodu</strong> ister. Kod
+              30 saniyede bir değişir ve yalnızca sizin telefonunuzda üretilir.
+              Yani parolanız çalınsa bile hesabınıza girilemez.
+            </p>
+            <ol className="list-decimal pl-5 space-y-2">
+              <li>
+                Telefonunuza bir <strong>doğrulayıcı uygulama</strong> kurun.
+                Ücretsiz seçenekler: <strong>Google Authenticator</strong>,
+                <strong> Microsoft Authenticator</strong>, <strong>Authy</strong>,
+                <strong> 2FAS</strong>. Hangisini seçtiğiniz fark etmiyor.
+              </li>
+              <li>
+                Aşağıdaki düğmeye basın; ekranda bir <strong>QR kod</strong> çıkacak.
+              </li>
+              <li>
+                Doğrulayıcı uygulamayı açıp &quot;hesap ekle / QR tara&quot;
+                deyin ve ekrandaki kodu okutun. Kameranız çalışmıyorsa QR&apos;ın
+                altındaki metin anahtarı elle yazabilirsiniz.
+              </li>
+              <li>
+                Uygulamada beliren 6 haneli kodu bu sayfaya girin. Kod doğrulanmadan
+                iki aşamalı doğrulama <strong>açılmaz</strong> — yanlış kurulum
+                yüzünden kendi hesabınızdan kilitlenmeyesiniz diye.
+              </li>
+              <li>
+                Açıldığında <strong>yedek kodlar</strong> gösterilecek. Telefonunuzu
+                kaybederseniz hesabınıza girmenin tek yolu bunlar; ekran görüntüsü
+                olarak telefonda değil, başka bir yerde saklayın.
+              </li>
+            </ol>
+            <p className="text-gray-600">
+              Vazgeçerseniz aynı yerden parolanızla kapatabilirsiniz.
+            </p>
+          </div>
+        </details>
+      )}
+
       {!user.totpEnabled ? (
         <button onClick={baslat} disabled={bekliyor}
           className="mt-4 bg-green-700 hover:bg-green-800 text-white font-bold px-6 py-3 rounded-xl transition disabled:opacity-50 flex items-center gap-2">
@@ -679,6 +731,7 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
         <div className="space-y-8">
           <GorunumAyari />
           <AvatarSecimi user={user} onGuncelle={onGuncelle} />
+          <UygulamayiYukle />
         </div>
       </div>
 

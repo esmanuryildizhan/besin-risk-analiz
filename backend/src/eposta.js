@@ -22,6 +22,11 @@
 const nodemailer = require('nodemailer');
 const dns = require('dns').promises;
 const net = require('net');
+const sablon = require('./eposta_sablon');
+
+// Altbilgideki ve logo adresindeki site adresi. Arayüzün adresiyle aynı
+// olmalı; FRONTEND_URL zaten CORS için tanımlı.
+const SITE = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
 /**
  * Ortam değişkeni değerini temizler ve ne yaptığını söyler. SAF fonksiyon.
@@ -191,7 +196,7 @@ async function tasiyiciyiAl() {
 
 /* ───────────────────────────── Brevo yolu ───────────────────────────── */
 
-async function brevoIleGonder(alici, konu, metin) {
+async function brevoIleGonder(alici, konu, metin, html) {
   const cevap = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -203,7 +208,11 @@ async function brevoIleGonder(alici, konu, metin) {
       sender: { name: GONDEREN_ADI, email: GONDEREN },
       to: [{ email: alici }],
       subject: konu,
+      // İKİSİ BİRDEN: HTML'i göstermeyen ya da engelleyen istemcide düz
+      // metin okunur kalıyor. Yalnızca HTML gönderilseydi o istemcilerde
+      // posta boş görünürdü.
       textContent: metin,
+      ...(html ? { htmlContent: html } : {}),
     }),
   });
 
@@ -238,7 +247,7 @@ async function brevoIleGonder(alici, konu, metin) {
 
 /* ──────────────────────── Ortak gönderim noktası ──────────────────────── */
 
-async function gonder(alici, konu, metin, gunlukNotu) {
+async function gonder(alici, konu, metin, gunlukNotu, html) {
   const y = yontem();
   if (y === 'yok') {
     console.warn(
@@ -247,10 +256,12 @@ async function gonder(alici, konu, metin, gunlukNotu) {
     );
     return false;
   }
-  if (y === 'brevo') return brevoIleGonder(alici, konu, metin);
+  if (y === 'brevo') return brevoIleGonder(alici, konu, metin, html);
 
   const t = await tasiyiciyiAl();
-  await t.sendMail({ from: GONDEREN, to: alici, subject: konu, text: metin });
+  await t.sendMail({
+    from: GONDEREN, to: alici, subject: konu, text: metin, ...(html ? { html } : {}),
+  });
   return true;
 }
 
@@ -270,6 +281,20 @@ async function sifirlamaGonder(alici, baglanti, dakika) {
       'değişmeyecektir.',
     ].join('\n'),
     `Sıfırlama bağlantısı gönderilmedi, günlüğe yazılıyor:\n${baglanti}`,
+    sablon.cerceve({
+      baslik: 'Parolanızı Sıfırlayın',
+      paragraflar: [
+        'Merhaba,',
+        'Besin Risk Analiz Sistemi hesabınız için bir parola sıfırlama talebi aldık.',
+        'Aşağıdaki düğmeye tıklayarak yeni parolanızı belirleyebilirsiniz:',
+      ],
+      dugmeYazisi: 'Yeni Parola Oluştur',
+      dugmeAdresi: baglanti,
+      sureNotu: `Bu bağlantı ${dakika} dakika geçerlidir ve yalnızca bir kez kullanılabilir.`,
+      dipNot: 'Bu talebi siz yapmadıysanız bu e-postayı dikkate almayabilirsiniz. '
+        + 'Parolanız değişmeyecek ve hesabınız güvende kalmaya devam edecek.',
+      siteAdresi: SITE,
+    }),
   );
 }
 
@@ -296,6 +321,21 @@ async function dogrulamaGonder(alici, baglanti, saat) {
       'hesaplarla giriş yapılamaz.',
     ].join('\n'),
     `Doğrulama bağlantısı gönderilmedi, günlüğe yazılıyor:\n${baglanti}`,
+    sablon.cerceve({
+      baslik: 'E-posta Adresinizi Doğrulayın',
+      paragraflar: [
+        'Merhaba,',
+        'Besin Risk Analiz Sistemi\'nde bu e-posta adresiyle bir hesap oluşturuldu.',
+        'Hesabınızı etkinleştirmek ve sistemi kullanmaya başlamak için aşağıdaki '
+          + 'düğmeye tıklayarak e-posta adresinizi doğrulayın:',
+      ],
+      dugmeYazisi: 'E-Posta Adresimi Doğrula',
+      dugmeAdresi: baglanti,
+      sureNotu: `Bu bağlantı ${saat} saat boyunca geçerlidir.`,
+      dipNot: 'Eğer bu hesabı siz oluşturmadıysanız bu e-postayı dikkate '
+        + 'almayabilirsiniz. Doğrulanmayan hesaplarla sisteme giriş yapılamaz.',
+      siteAdresi: SITE,
+    }),
   );
 }
 
@@ -323,6 +363,22 @@ async function zatenKayitliGonder(alici) {
       'erişilmedi ve hiçbir bilgisi değişmedi.',
     ].join('\n'),
     `${alici} adresine "zaten kayıtlı" bilgilendirmesi gönderilemedi.`,
+    sablon.cerceve({
+      baslik: 'Bu Adrese Ait Bir Hesap Zaten Var',
+      paragraflar: [
+        'Merhaba,',
+        'Bu e-posta adresiyle Besin Risk Analiz Sistemi\'ne kayıt olunmaya '
+          + 'çalışıldı, ancak bu adrese ait bir hesap zaten bulunuyor.',
+        'Bunu siz yaptıysanız doğrudan giriş yapabilirsiniz. Parolanızı '
+          + 'hatırlamıyorsanız giriş ekranındaki "Parolamı unuttum" '
+          + 'bağlantısını kullanabilirsiniz.',
+      ],
+      dugmeYazisi: 'Giriş Yap',
+      dugmeAdresi: SITE,
+      dipNot: 'Bu denemeyi siz yapmadıysanız bir şey yapmanız gerekmiyor; '
+        + 'hesabınıza erişilmedi ve hiçbir bilgisi değişmedi.',
+      siteAdresi: SITE,
+    }),
   );
 }
 
@@ -350,6 +406,23 @@ async function silmeUyarisiGonder(alici, kalanGun) {
       'dolduğunda veriler kendiliğinden silinecek.',
     ].join('\n'),
     `${alici} adresine silme uyarısı gönderilemedi.`,
+    sablon.cerceve({
+      baslik: 'Hesabınız Yakında Silinecek',
+      paragraflar: [
+        'Merhaba,',
+        'Besin Risk Analiz Sistemi hesabınıza uzun süredir giriş yapılmadı.',
+        `Hesabınız ve içindeki tüm veriler ${kalanGun} gün içinde kalıcı olarak `
+          + 'silinecek. Bu, verinin gerektiğinden uzun saklanmaması için '
+          + 'uygulanan otomatik bir kuraldır.',
+        'Hesabınızı korumak için tek yapmanız gereken giriş yapmak.',
+      ],
+      dugmeYazisi: 'Giriş Yap ve Hesabımı Koru',
+      dugmeAdresi: SITE,
+      sureNotu: `Kalan süre: ${kalanGun} gün.`,
+      dipNot: 'Hesabınızı kullanmayacaksanız bir şey yapmanıza gerek yok; '
+        + 'süre dolduğunda veriler kendiliğinden silinecek.',
+      siteAdresi: SITE,
+    }),
   );
 }
 
@@ -428,6 +501,23 @@ async function supheliGirisGonder(alici) {
       'Bu iletiye cevap vermenize gerek yok.',
     ].join('\n'),
     `şüpheli giriş uyarısı: ${alici}`,
+    sablon.cerceve({
+      baslik: 'Hesabınızda Başarısız Giriş Denemeleri',
+      paragraflar: [
+        'Merhaba,',
+        'Besin Risk Analiz hesabınıza kısa süre içinde birden çok kez başarısız '
+          + 'giriş denendi.',
+        'Bu denemeler size aitse bir şey yapmanıza gerek yok.',
+        'Siz yapmadıysanız hesabınız hedef alınmış olabilir. Parolanızı '
+          + 'değiştirmenizi ve iki aşamalı doğrulamayı açmanızı öneririz '
+          + '(Profil > Güvenlik).',
+      ],
+      dugmeYazisi: 'Hesabımı Kontrol Et',
+      dugmeAdresi: SITE,
+      dipNot: 'Güvenlik gerekçesiyle hangi adresten denendiği ve kaç kez '
+        + 'denendiği bu iletide yazılmıyor.',
+      siteAdresi: SITE,
+    }),
   );
 }
 
