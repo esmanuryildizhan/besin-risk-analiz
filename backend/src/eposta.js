@@ -398,8 +398,42 @@ function ayarlar() {
   };
 }
 
+
+/**
+ * Hesaba art arda başarısız giriş denendiğinde hesap SAHİBİNE gider.
+ *
+ * NİYE YÖNETİCİYE DEĞİL KULLANICIYA: saldırıya uğrayan hesabın sahibi,
+ * parolasını değiştirip 2FA açabilecek tek kişi. Yöneticiye gitseydi
+ * yöneticinin yapabileceği tek şey zaten kullanıcıyı uyarmak olurdu, üstelik
+ * araya bir kişi daha girmiş olurdu.
+ *
+ * İÇERİĞİ KASTEN FAKİR: hangi IP'den denendiği, kaç kez denendiği gibi
+ * ayrıntılar yazılmıyor. Postanın kendisi ele geçerse saldırgana bilgi
+ * vermemeli; kullanıcının ihtiyacı olan tek şey "bir şey oluyor, önlem al".
+ */
+async function supheliGirisGonder(alici) {
+  return gonder(
+    alici,
+    'Hesabınızda başarısız giriş denemeleri — Besin Risk Analiz',
+    [
+      'Besin Risk Analiz hesabınıza kısa süre içinde birden çok kez başarısız',
+      'giriş denendi.',
+      '',
+      'Bu denemeler siz yaptıysanız bir şey yapmanıza gerek yok.',
+      '',
+      'Siz yapmadıysanız hesabınız hedef alınmış olabilir. Önerilen adımlar:',
+      '  1. Parolanızı değiştirin (Profil > Parola Değiştir).',
+      '  2. İki aşamalı doğrulamayı açın (Profil > İki Aşamalı Doğrulama).',
+      '',
+      'Bu iletiye cevap vermenize gerek yok.',
+    ].join('\n'),
+    `şüpheli giriş uyarısı: ${alici}`,
+  );
+}
+
 module.exports = {
   yontem,
   sifirlamaGonder, dogrulamaGonder, zatenKayitliGonder, silmeUyarisiGonder,
   yapilandirildiMi, eksikNe, yoluCoz, ortamiTemizle, baglantiyiDene, ayarlar,
+  supheliGirisGonder,
 };

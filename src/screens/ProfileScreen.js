@@ -4,7 +4,8 @@
 
 import React, { useState } from 'react';
 import {
-  Activity, CheckCircle, Info, KeyRound, Loader2, Monitor, Moon, Palette, Save, Shield, Sun, User,
+  Activity, CheckCircle, Clock, Info, KeyRound, Loader2, Monitor, Moon, Palette,
+  Save, Shield, Sun, User,
 } from 'lucide-react';
 import { api, tokenKaydet } from '../api';
 import { HataKutusu, SecimKutusu } from '../components/ortak';
@@ -517,6 +518,50 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
       <ParolaDegistirme />
 
       <IkiAsamaliDogrulama user={user} onGuncelle={onGuncelle} />
+
+      {/* SAKLAMA SÜRESİ GÖRÜNÜR OLMALI.
+          Aydınlatma metninde yazıyor ama onu kayıt sırasında bir kez okuyup
+          geçiyorlar. KVKK m.4 verinin "gerekli olan süre kadar" tutulmasını
+          istiyor; kullanıcının bu süreyi İSTEDİĞİ AN görebilmesi, hakkını
+          kullanabilmesinin ön şartı. Sayılar sunucudaki ayarla aynı
+          (backend/src/saklama.js ve guvenlik_gunlugu.js). */}
+      <div className="bg-white rounded-3xl border border-gray-200 p-8">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+          <div className="bg-sky-100 p-3 rounded-2xl text-sky-800"><Clock size={22} /></div> Verileriniz Ne Kadar Saklanıyor
+        </h2>
+        <ul className="space-y-3 text-sm text-gray-700">
+          <li className="flex gap-3">
+            <span className="text-sky-700 font-bold shrink-0">•</span>
+            <span>
+              <strong>Hesap ve sağlık verileriniz:</strong> hesabınız durduğu sürece.
+              Hastalık, alerji, tahlil ve günlük kayıtlarınız şifreli saklanıyor.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <span className="text-sky-700 font-bold shrink-0">•</span>
+            <span>
+              <strong>180 gün giriş yapılmazsa</strong> hesabınız tüm verileriyle
+              otomatik siliniyor. Silinmeden <strong>14 gün önce</strong> e-posta ile
+              uyarılıyorsunuz; o süre içinde giriş yapmanız sayacı sıfırlıyor.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <span className="text-sky-700 font-bold shrink-0">•</span>
+            <span>
+              <strong>Güvenlik kayıtları</strong> (başarısız giriş denemeleri):
+              90 gün. IP adresiniz düz değil, geri döndürülemez bir özet olarak
+              tutuluyor.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <span className="text-sky-700 font-bold shrink-0">•</span>
+            <span>
+              <strong>Dilediğiniz an silebilirsiniz.</strong> Aşağıdaki &quot;Hesabımı
+              sil&quot; işlemi geri alınamaz ve 180 günü beklemez.
+            </span>
+          </li>
+        </ul>
+      </div>
 
       <VeriIndirme />
 

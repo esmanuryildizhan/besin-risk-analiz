@@ -435,3 +435,32 @@ model LabResult {
   userId   Int
   user     User     @relation(fields: [userId], references: [id])
 }
+
+/// Güvenlik olayları — başarısız giriş, kilitlenme, geçersiz bilet vb.
+///
+/// NİYE VERİTABANINA DA YAZILIYOR: olaylar yalnızca konsola yazıldığında
+/// hiçbir yere ulaşmıyordu. Render'ın günlükleri sınırlı süre tutuluyor,
+/// aranabilir değil ve servis yeniden başlayınca akış kopuyor. Saldırı
+/// olduğunu fark etmenin yolu yoktu.
+///
+/// IP ADRESİ DÜZ TUTULMUYOR: IP, KVKK ve GDPR açısından kişisel veri.
+/// Saklanan değer HMAC-SHA256 özetinin ilk 16 hanesi. Bu, "aynı IP mi"
+/// sorusunu cevaplıyor (saldırı tespiti için gereken tek şey bu) ama
+/// özetten IP'ye geri dönülemiyor ve anahtar olmadan başka bir veri
+/// kümesiyle eşleştirilemiyor.
+///
+/// SAKLAMA SÜRESİ SINIRLI: kayıtlar GUVENLIK_SAKLAMA_GUN (varsayılan 90)
+/// gün sonra siliniyor — KVKK m.4'teki "ilgili olduğu amaç için gerekli
+/// olan süre kadar" ilkesi.
+model GuvenlikOlayi {
+  id         Int      @id @default(autoincrement())
+  olay       String   // "giriş başarısız", "HESAP KİLİTLENDİ" ...
+  zaman      DateTime @default(now())
+  ipOzeti    String?  // HMAC özeti, ham IP DEĞİL
+  kullaniciId Int?    // ilişki kurulmuyor: kullanıcı silinse de olay kalmalı
+  ayrinti    String?  // kişisel veri içermez; sayaç, sebep gibi bilgiler
+
+  @@index([zaman])
+  @@index([olay, zaman])
+  @@index([kullaniciId, zaman])
+}

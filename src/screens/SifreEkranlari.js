@@ -120,6 +120,8 @@ export const SifremiUnuttumEkrani = ({ onGeri }) => {
         simge={CheckCircle}
         baslik="Bağlantı gönderildi"
         aciklama={`${email} adresi kayıtlıysa, parola sıfırlama bağlantısı gönderildi. `
+          + 'Sunucu bir süredir kullanılmadıysa uyanması yaklaşık bir dakika sürebiliyor, '
+          + 'bu yüzden posta hemen gelmeyebilir. '
           + 'Bağlantı 60 dakika geçerlidir ve yalnızca bir kez kullanılabilir.'}
       >
         <p className="text-xs text-gray-500 text-center leading-relaxed mb-5">

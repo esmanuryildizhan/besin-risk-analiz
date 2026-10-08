@@ -75,7 +75,32 @@ function kilitliMi(kilitBitisi, simdi = new Date()) {
   return Boolean(kilitBitisi) && new Date(kilitBitisi) > simdi;
 }
 
+
+/**
+ * Durum değiştiren bir isteğin kaynağı (Origin) kabul edilir mi?
+ *
+ * SAF FONKSİYON: karar ara katmanın içine gömülü kalsaydı sınanamazdı —
+ * express uygulaması ayağa kaldırmak, veritabanı bağlamak gerekirdi. Bu
+ * projede aynı hata hesap kilidi mantığında bir kez yapıldı (karar index.js
+ * içindeydi, testler onun KOPYASINI sınıyordu ve asıl kod bozulsa testler
+ * geçmeye devam ederdi).
+ *
+ * KURAL:
+ *  - GET/HEAD/OPTIONS: veri değiştirmiyor, serbest.
+ *  - Origin yok: tarayıcı değil (curl, betik). CSRF kurbanın TARAYICISINDAKİ
+ *    kimliği kullanır; tarayıcı olmayan istemci saldırının öznesi olamaz.
+ *    Zorunlu kılmak saldırıyı engellemez, meşru araçları kırardı.
+ *  - Origin var ve eşleşmiyor: reddet.
+ */
+function kaynakKabulEdilirMi(yontem, kaynak, izinliKoken) {
+  const guvenli = ['GET', 'HEAD', 'OPTIONS'];
+  if (guvenli.includes(String(yontem || '').toUpperCase())) return true;
+  if (!kaynak) return true;
+  return kaynak === izinliKoken;
+}
+
 module.exports = {
+  kaynakKabulEdilirMi,
   biletOzeti, biletDamgadanSonraMi, kilitKarari, kilitliMi,
   KILIT_ESIGI, KILIT_DAKIKA,
 };

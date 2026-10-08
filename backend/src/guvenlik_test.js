@@ -22,6 +22,7 @@ const saklama = require('./saklama');
 const eposta = require('./eposta');
 const kvkk = require('./kvkk_metinleri');
 const parola = require('./parola_kurali');
+const gunlukKayit = require('./guvenlik_gunlugu');
 
 let gecen = 0;
 const kalan = [];
@@ -1011,6 +1012,105 @@ test('G81 Arayüzdeki parola kuralı kopyası sunucuyla AYNI', () => {
   ])];
   const fazlalik = arayuzKodlari.filter((k) => !sunucuKodlari.includes(k));
   esit(fazlalik.length, 0, `arayüzde sunucuda olmayan kural var: ${fazlalik.join(',')}`);
+});
+
+// --- Güvenlik olay günlüğü (G82-G86) ----------------------------------------
+//
+// Niye güvenlik testi: günlüğün kendisi kişisel veri işliyor (IP) ve
+// günlük tutmanın bir isteği bozmaması gerekiyor. İkisi de sessizce
+// bozulabilecek şeyler.
+
+test('G82 IP özeti geri döndürülemez ve tutarlı', () => {
+  const eski = process.env.GUVENLIK_IP_ANAHTARI;
+  process.env.GUVENLIK_IP_ANAHTARI = 'test-anahtari-yeterince-uzun';
+  try {
+    // Modül anahtarı önbelleğe alıyor; taze bir kopya gerekiyor.
+    delete require.cache[require.resolve('./guvenlik_gunlugu')];
+    const g = require('./guvenlik_gunlugu');
+    const a = g.ipOzetle('203.0.113.7');
+    const b = g.ipOzetle('203.0.113.7');
+    const c = g.ipOzetle('203.0.113.8');
+    esit(a, b, 'aynı IP farklı özet verdi (sayım yapılamaz)');
+    dogru(a !== c, 'farklı IP aynı özeti verdi');
+    dogru(!a.includes('203') && !a.includes('113'), `IP özetin içinde görünüyor: ${a}`);
+    esit(a.length, 16, 'özet uzunluğu beklenenden farklı');
+  } finally {
+    process.env.GUVENLIK_IP_ANAHTARI = eski;
+    delete require.cache[require.resolve('./guvenlik_gunlugu')];
+  }
+});
+
+test('G83 Günlük yazımı başarısız olsa bile hata FIRLATMIYOR', async () => {
+  // Bu testin koruduğu şey şu: veritabanı erişilemezken ya da göç henüz
+  // uygulanmamışken kullanıcı giriş YAPABİLMELİ. Günlük tutmak isteği
+  // bozarsa, günlük tutmanın kendisi bir kullanılabilirlik açığı olur.
+  const sahteBozuk = { guvenlikOlayi: { create: async () => { throw new Error('tablo yok'); } } };
+  const sonuc = await gunlukKayit.kaydet(sahteBozuk, { olay: 'deneme', ip: '1.2.3.4' });
+  esit(sonuc, false, 'başarısız yazım başarılı bildirildi');
+});
+
+test('G84 Sayım hatasında uyarı GÖNDERİLMİYOR (posta bombardımanı riski)', async () => {
+  // Emin olunamayan durumda "gönder" demek, saldırganın art arda deneme
+  // yaparak kurbanın posta kutusunu doldurmasına yol açardı.
+  const sahteBozuk = { guvenlikOlayi: { count: async () => { throw new Error('yok'); } } };
+  const uyarildi = await gunlukKayit.yakindaUyarildiMi(sahteBozuk, 1);
+  esit(uyarildi, true, 'hata durumunda "uyarılmadı" denildi -> posta gönderilirdi');
+});
+
+test('G85 Eşik normal yanlış yazmayı değil sistemli denemeyi yakalıyor', () => {
+  dogru(gunlukKayit.ESIK >= 4, `eşik çok düşük (${gunlukKayit.ESIK}), her yanlış yazımda posta gider`);
+  dogru(gunlukKayit.PENCERE_DK <= 60, `pencere çok geniş (${gunlukKayit.PENCERE_DK} dk)`);
+  dogru(gunlukKayit.UYARI_ARALIK_SAAT >= 1, 'uyarı aralığı yok, posta bombardımanı mümkün');
+});
+
+test('G86 Olay kayıtlarının saklama süresi sınırlı (KVKK m.4)', async () => {
+  dogru(gunlukKayit.SAKLAMA_GUN > 0 && gunlukKayit.SAKLAMA_GUN <= 365,
+    `saklama süresi makul değil: ${gunlukKayit.SAKLAMA_GUN} gün`);
+  // Silmenin DOĞRU sınırı kullandığını doğrula: sahte prisma koşulu yakalıyor.
+  let gelenKosul = null;
+  const sahte = {
+    guvenlikOlayi: {
+      deleteMany: async (a) => { gelenKosul = a.where.zaman.lt; return { count: 7 }; },
+    },
+  };
+  const n = await gunlukKayit.eskileriSil(sahte);
+  esit(n, 7, 'silinen sayı aktarılmadı');
+  const beklenenMs = Date.now() - gunlukKayit.SAKLAMA_GUN * 24 * 60 * 60 * 1000;
+  dogru(Math.abs(gelenKosul.getTime() - beklenenMs) < 5000,
+    'silme sınırı saklama süresiyle uyuşmuyor');
+});
+
+// --- Kaynak (Origin) doğrulaması (G87-G89) ---------------------------------
+
+const KOKEN = 'https://besin-risk-analiz.vercel.app';
+
+test('G87 Yabancı kaynaktan gelen DEĞİŞTİRME isteği reddediliyor', () => {
+  ['POST', 'PUT', 'PATCH', 'DELETE'].forEach((y) => {
+    esit(
+      oturum.kaynakKabulEdilirMi(y, 'https://kotu-site.example', KOKEN), false,
+      `${y} isteği yabancı kaynaktan kabul edildi`,
+    );
+  });
+  esit(oturum.kaynakKabulEdilirMi('POST', KOKEN, KOKEN), true, 'kendi arayüzümüz reddedildi');
+});
+
+test('G88 Okuma istekleri etkilenmiyor', () => {
+  // GET veri değiştirmiyor; engellemek işe yaramaz, yalnızca kırar.
+  ['GET', 'HEAD', 'OPTIONS'].forEach((y) => {
+    dogru(
+      oturum.kaynakKabulEdilirMi(y, 'https://kotu-site.example', KOKEN),
+      `${y} isteği engellendi`,
+    );
+  });
+});
+
+test('G89 Origin başlığı OLMAYAN istek geçiyor (tarayıcı değil)', () => {
+  // CSRF, kurbanın TARAYICISINDAKİ kimliği kullanır. Tarayıcılar siteler
+  // arası isteklerde Origin'i her zaman gönderir; göndermeyen bir istemci
+  // (curl, betik) saldırının öznesi olamaz. Zorunlu kılmak saldırıyı
+  // engellemez, yalnızca meşru araçları kırardı.
+  dogru(oturum.kaynakKabulEdilirMi('POST', undefined, KOKEN), 'Origin yokken reddedildi');
+  dogru(oturum.kaynakKabulEdilirMi('POST', '', KOKEN), 'boş Origin reddedildi');
 });
 
 Promise.all(sozler).then(() => {

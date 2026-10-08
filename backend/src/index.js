@@ -61,8 +61,9 @@ const totp = require('./totp');
 const kripto = require('./kripto');
 const eposta = require('./eposta');
 const saklama = require('./saklama');
+const gunlukKayit = require('./guvenlik_gunlugu');
 const {
-  biletOzeti, biletDamgadanSonraMi, kilitKarari, kilitliMi,
+  biletOzeti, biletDamgadanSonraMi, kilitKarari, kilitliMi, kaynakKabulEdilirMi,
 } = require('./oturum');
 const gunluk = require('./gunluk');
 const { kalemiCoz, gunKaydiniCoz, kalemiDondur } = gunluk;
@@ -96,7 +97,31 @@ app.use(cors({ origin: IZINLI_KOKEN, credentials: true }));
 // Güvenlik başlıkları. API JSON döndürüyor, sayfa sunmuyor; bu yüzden
 // tarayıcıya "bu içerikte HTML arama, MIME tipini tahmin etme" diyen
 // başlıklar işe yarıyor, içerik güvenlik politikası (CSP) ise gereksiz.
-app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+// CSP ARTIK AÇIK.
+//
+// ÖNEMLİ AYRIM: bu sunucu yalnızca JSON döndürüyor; kullanıcının tarayıcısında
+// çalışan HTML'i Vercel sunuyor. Dolayısıyla XSS'e karşı asıl koruma
+// vercel.json içindeki CSP başlığı. Buradaki politika API cevaplarını
+// kapsıyor ve 'none' ile en katısı: bir JSON cevabı hiçbir kaynak yüklememeli.
+// Biri bir API cevabını tarayıcıya HTML diye yorumlatmayı başarsa bile
+// içinden betik çalıştıramaz.
+//
+// frameAncestors 'none': API hiçbir çerçeveye gömülemez (clickjacking).
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      'default-src': ["'none'"],
+      'frame-ancestors': ["'none'"],
+      'base-uri': ["'none'"],
+      'form-action': ["'none'"],
+    },
+  },
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  // Tarayıcıya "bu alan adına bir yıl boyunca yalnızca HTTPS ile gel" diyor.
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+  referrerPolicy: { policy: 'same-origin' },
+}));
 
 // Render gibi ortamlarda istek bir vekil sunucudan geçiyor. Bu ayar olmadan
 // hız sınırlayıcı herkesi TEK bir IP sanar ve bir kullanıcının denemeleri
@@ -158,6 +183,30 @@ app.use(rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 }));
+/*  KAYNAK (Origin) DOĞRULAMASI — durum değiştiren istekler için
+    ──────────────────────────────────────────────────────────────────────────
+    CORS tarayıcıya "bu cevabı okuma" diyor ama isteğin GÖNDERİLMESİNİ her
+    zaman engellemiyor. Bu denetim, isteğin gerçekten bizim arayüzümüzden
+    geldiğini sunucu tarafında doğruluyor.
+
+    NİYE "VARSA" DENETLENİYOR, "ZORUNLU" DEĞİL: tarayıcılar siteler arası
+    isteklerde Origin başlığını HER ZAMAN gönderiyor. Tarayıcı olmayan
+    istemciler (curl, betik) göndermiyor — ve onlar zaten CSRF saldırısının
+    öznesi olamaz, çünkü CSRF kurbanın tarayıcısındaki kimliği kullanır.
+    Başlığı zorunlu kılmak saldırıyı engellemez, yalnızca meşru araçları
+    kırardı.
+
+    GET ve HEAD dışarıda: veri değiştirmiyorlar.
+
+    Bugün oturum Authorization başlığıyla taşınıyor, yani CSRF riski zaten
+    düşük. Bu denetim ikinci katman ve ileride çerez tabanlı oturuma
+    geçilirse asıl korumaya dönüşecek.  */
+app.use((req, res, sonraki) => {
+  if (kaynakKabulEdilirMi(req.method, req.get('origin'), IZINLI_KOKEN)) return sonraki();
+  guvenlikGunlugu('yabancı kaynaktan değiştirme isteği', req, `yol=${req.path}`);
+  return res.status(403).json({ error: 'İstek beklenen adresten gelmedi.' });
+});
+
 app.use(express.json());   // gelen JSON gövdeyi otomatik çözer
 
 // ---------------------------------------------------------------------------
@@ -296,10 +345,57 @@ function adresiMaskele(adres) {
   return `${bas}***${d.slice(at)}`;
 }
 
-function guvenlikGunlugu(olay, req, ek = '') {
-  const ip = req.ip || '(bilinmiyor)';
+/**
+ * Güvenlik olayını hem konsola hem veritabanına yazar.
+ *
+ * HAM IP ARTIK KONSOLA DA YAZILMIYOR. IP, KVKK ve GDPR açısından kişisel
+ * veri; Render'ın günlükleri de bir saklama ortamı. "Aynı kaynak mı"
+ * sorusunu cevaplamak için özet yeterli, adresin kendisi gerekmiyor.
+ *
+ * `await` EDİLMİYOR: günlük tutmak isteği yavaşlatmamalı ve veritabanı o an
+ * erişilemezse isteği bozmamalı. Modül hatayı kendisi yutuyor.
+ *
+ * kullaniciId isteğe bağlı: hesabı bilinen olaylarda (başarısız giriş,
+ * kilitlenme) veriliyor, bilinmeyenlerde (geçersiz bilet) boş kalıyor.
+ */
+function guvenlikGunlugu(olay, req, ek = '', kullaniciId = null) {
+  const ozet = gunlukKayit.ipOzetle(req && req.ip) || '(yok)';
   const zaman = new Date().toISOString();
-  console.warn(`[GÜVENLİK] ${zaman} ${olay} ip=${ip}${ek ? ` ${ek}` : ''}`);
+  console.warn(`[GÜVENLİK] ${zaman} ${olay} ipOzeti=${ozet}${ek ? ` ${ek}` : ''}`);
+  gunlukKayit.kaydet(prisma, {
+    olay, ip: req && req.ip, kullaniciId, ayrinti: ek || null,
+  });
+}
+
+/**
+ * Art arda başarısız girişten sonra hesap sahibini uyarır.
+ *
+ * NİYE SAYIYORUZ, NİYE HER BAŞARISIZ GİRİŞTE UYARMIYORUZ: parolasını yanlış
+ * yazan kullanıcıya posta göndermek hem anlamsız hem rahatsız edici. Eşik
+ * (15 dakikada 5) normal yanlış yazmayı değil, sistemli denemeyi yakalıyor.
+ *
+ * Günde en fazla bir uyarı: aksi hâlde saldırgan art arda deneyerek kurbanın
+ * posta kutusunu doldurabilir, yani uyarının kendisi silaha dönüşürdü.
+ *
+ * Beklenmiyor ve hatası yutuluyor: giriş akışını yavaşlatmamalı.
+ */
+async function supheliGirisUyar(kullanici, req) {
+  try {
+    if (!kullanici || !kullanici.id) return;
+    const sayi = await gunlukKayit.sonBasarisizSayisi(prisma, kullanici.id);
+    if (sayi < gunlukKayit.ESIK) return;
+    if (await gunlukKayit.yakindaUyarildiMi(prisma, kullanici.id)) return;
+    await eposta.supheliGirisGonder(kullanici.email);
+    // Gönderildiği de bir olay: bir sonraki uyarının zamanını buradan sayıyoruz.
+    await gunlukKayit.kaydet(prisma, {
+      olay: 'şüpheli giriş uyarısı gönderildi',
+      ip: req && req.ip,
+      kullaniciId: kullanici.id,
+      ayrinti: `denemeSayisi=${sayi}`,
+    });
+  } catch (e) {
+    console.warn('[GÜVENLİK] şüpheli giriş uyarısı gönderilemedi:', e.message);
+  }
 }
 
 /**
@@ -591,7 +687,7 @@ app.post('/api/login', girisSinirlayici, async (req, res) => {
     if (user && kilitliMi(user.kilitBitisi)) {
       const kalanDk = Math.ceil((user.kilitBitisi - Date.now()) / 60000);
       guvenlikGunlugu('kilitli hesaba giriş denemesi', req,
-        `hesap=${adresiMaskele(email)}`);
+        `hesap=${adresiMaskele(email)}`, user.id);
       return res.status(429).json({
         error: `Çok fazla hatalı deneme yapıldı. Bu hesap ${kalanDk} dakika sonra `
           + 'yeniden denenebilir. Parolanızı hatırlamıyorsanız "Parolamı unuttum" '
@@ -614,14 +710,19 @@ app.post('/api/login', girisSinirlayici, async (req, res) => {
             : karar,
         });
         if (karar.kilitBitisi) {
-          guvenlikGunlugu('HESAP KİLİTLENDİ', req, `hesap=${adresiMaskele(email)}`);
+          guvenlikGunlugu('HESAP KİLİTLENDİ', req, `hesap=${adresiMaskele(email)}`, user.id);
         }
       }
       // Hesabın var olup olmadığı günlüğe YAZILIYOR (kullanıcıya değil):
       // "kayıtlı olmayan adreslere deneme" ile "kayıtlı hesaba parola deneme"
       // farklı saldırılar ve ayırt edilmeleri gerekiyor.
       guvenlikGunlugu('giriş başarısız', req,
-        `hesap=${adresiMaskele(email)} kayıtlı=${user ? 'evet' : 'hayır'}`);
+        `hesap=${adresiMaskele(email)} kayıtlı=${user ? 'evet' : 'hayır'}`,
+        user ? user.id : null);
+      // Hesap sahibini uyar (eşiği aştıysa). Beklenmiyor: cevabı geciktirmemeli
+      // ve SÜREYİ DE DEĞİŞTİRMEMELİ — kayıtlı/kayıtsız hesap arasında zaman
+      // farkı doğsaydı hesap sayımı zamanlamadan yapılabilirdi.
+      if (user) supheliGirisUyar(user, req);
       return res.status(401).json({ error: 'E-posta veya parola hatalı.' });
     }
 
@@ -792,6 +893,10 @@ let sonSupurme = 0;
 async function saklamaSuresiniUygula() {
   if (Date.now() - sonSupurme < 24 * 60 * 60 * 1000) return;
   sonSupurme = Date.now();
+
+  // Güvenlik olayları da süresiz tutulmuyor (KVKK m.4: amaçla sınırlı süre).
+  const silinen = await gunlukKayit.eskileriSil(prisma);
+  if (silinen) console.log(`[GÜVENLİK] ${silinen} eski olay kaydı silindi.`);
   try {
     const kullanicilar = await prisma.user.findMany({
       select: {
