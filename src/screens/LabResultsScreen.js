@@ -56,6 +56,75 @@ const TahlilRozeti = ({ yorum, aralik }) => {
   );
 };
 
+/**
+ * Ayrıştırma uyarıları.
+ *
+ * NİYE İKİYE AYRILDI: eskiden hepsi "Okunamayan bilgiler" başlığı altında tek
+ * listede gösteriliyordu. Gerçek bir e-Nabız raporunda ÖLÇÜLDÜ (8 Ekim 2026):
+ * hemogram panelinde referans aralığı BASILMIYOR — biyokimyada basılıyor
+ * ("AFP 9.20 µg/L 0 - 8"), hemogramda basılmıyor ("BASO# 0.05 x10^9/L").
+ * Sonuç: tamamen normal bir rapor, 28 satırlık bir hata yığını gibi
+ * görünüyordu ve kullanıcı uygulamanın bozuk olduğunu sanıyordu.
+ *
+ * Değerler zaten kaydediliyordu; yanlış olan tek şey sunumdu. Artık:
+ *  - gerçekten okunamayan satırlar (hata) kırmızımsı kutuda,
+ *  - raporda aralığı olmayan testler (hata değil) nötr kutuda, açıklamasıyla.
+ */
+const AyristirmaUyarilari = ({ uyarilar }) => {
+  if (!uyarilar || !uyarilar.length) return null;
+  // Eski sürümlerden düz metin gelirse de bozulmasın.
+  const duz = uyarilar.filter((u) => typeof u === 'string');
+  const tur = (t) => uyarilar.filter((u) => u && u.tur === t);
+  const okunamadi = tur('okunamadi');
+  const aralikYok = tur('aralikYok');
+  const kisisel = tur('kisiselAtlandi');
+
+  return (
+    <div className="space-y-3 mb-6">
+      {(okunamadi.length > 0 || duz.length > 0) && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl text-sm">
+          <strong className="block mb-1">Okunamayan satırlar</strong>
+          <p className="mb-2 text-red-700/90">
+            Bu testlerin sonucu PDF&apos;ten çıkarılamadı; kaydedilmeyecekler.
+          </p>
+          {[...okunamadi.map((u) => u.ad), ...duz].join(' · ')}
+        </div>
+      )}
+
+      {kisisel.length > 0 && (
+        <div className="bg-sky-50 border border-sky-200 text-sky-800 px-5 py-4 rounded-2xl text-sm">
+          <strong className="block mb-1">Kişisel bilgi içeren satırlar atlandı</strong>
+          <p>
+            Raporunuzdaki ad, doğum tarihi gibi satırlar kasıtlı olarak
+            okunmadı ve hiç kaydedilmiyor.
+          </p>
+        </div>
+      )}
+
+      {aralikYok.length > 0 && (
+        <details className="bg-gray-50 border border-gray-200 text-gray-700 rounded-2xl text-sm">
+          <summary className="px-5 py-4 cursor-pointer font-bold select-none">
+            {aralikYok.length} testin referans aralığı raporda yok
+          </summary>
+          <div className="px-5 pb-4">
+            <p className="mb-2">
+              Bu <strong>bir hata değil</strong>: değerler okundu ve kaydedilecek.
+              e-Nabız, hemogram (tam kan sayımı) panelinde referans aralığı
+              basmıyor; biyokimya ve idrar panellerinde basıyor.
+            </p>
+            <p className="mb-3">
+              Aralık olmadığı için bu testler için &quot;yüksek / düşük&quot; yorumu
+              yapılmıyor; değerin kendisi kaydediliyor ve geçmişle
+              karşılaştırılabiliyor.
+            </p>
+            <p className="text-gray-600">{aralikYok.map((u) => u.ad).join(' · ')}</p>
+          </div>
+        </details>
+      )}
+    </div>
+  );
+};
+
 const SonucSatiri = ({ t, secili, onSec }) => (
   <label className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition
     ${secili ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-100 opacity-50'}`}>
@@ -280,12 +349,7 @@ export const LabResultsScreen = () => {
           <p className="text-sm text-gray-500 mb-6">
             Yanlış okunan bir satır varsa işaretini kaldırın; yalnızca seçtikleriniz kaydedilir.
           </p>
-          {okunan.uyarilar && okunan.uyarilar.length > 0 && (
-            <div className="mb-6 bg-amber-50 border border-amber-200 text-amber-800 px-5 py-4 rounded-2xl text-sm">
-              <strong className="block mb-1">Okunamayan bilgiler:</strong>
-              {okunan.uyarilar.join(' · ')}
-            </div>
-          )}
+          <AyristirmaUyarilari uyarilar={okunan.uyarilar} />
           <div className="space-y-2 max-h-[460px] overflow-y-auto pr-2">
             {okunan.testler.map((t, i) => (
               <SonucSatiri key={`${t.testName}-${i}`} t={t} secili={!!secimler[i]}

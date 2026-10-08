@@ -130,6 +130,19 @@ export const SecimKutusu = ({ label, secenekler, secili, onEkle, onCikar }) => {
             <button
               type="button"
               key={o.key}
+              /* HATA GEÇMİŞİ — 8 Ekim 2026. Seçenekler <div> iken <button>
+                 yapıldı (klavye erişimi için, WCAG 2.1.1) ve listeyi kapatan
+                 mantık odağa bağlandı. Bu, FARE İLE SEÇMEYİ bazı tarayıcılarda
+                 BOZDU: Safari ve Firefox, bir düğmeye tıklandığında ona odak
+                 VERMİYOR (Chrome veriyor). O tarayıcılarda girdi odağı
+                 kaybediyor, relatedTarget boş geliyor, liste onClick
+                 çalışmadan kapanıyordu — kullanıcı tıklıyor ama hiçbir şey
+                 olmuyordu.
+
+                 Çözüm mousedown'ı engellemek: odak girdide KALIYOR, yani
+                 liste hiç kapanmıyor ve tıklama her tarayıcıda ulaşıyor.
+                 Klavye etkilenmiyor; Tab ile gezerken mousedown yok. */
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => { onEkle(o.key); setArama(''); }}
               className="w-full text-left px-4 py-2 hover:bg-green-50 focus:bg-green-100 cursor-pointer text-sm font-medium text-gray-700 outline-none"
             >

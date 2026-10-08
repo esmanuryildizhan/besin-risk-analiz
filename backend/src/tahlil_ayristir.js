@@ -316,7 +316,7 @@ function satirlariAyristir(satirlar) {
       // gönderiliyor ve sunucu günlüğüne de düşebiliyor. "Atlanan satır:
       // ESMA NUR YILDIZHAN" yazmak, korumaya çalıştığımız veriyi ifşa etmek
       // olurdu.
-      uyarilar.push(`Kişisel bilgi içerdiği değerlendirilen bir satır atlandı (${kisisel}).`);
+      uyarilar.push({ tur: 'kisiselAtlandi', sebep: kisisel });
       continue;
     }
 
@@ -343,10 +343,28 @@ function satirlariAyristir(satirlar) {
 
   tekil.forEach((t) => { delete t._siniflamaMetni; });
 
+  /* UYARILAR İKİ AYRI ŞEY — karıştırılmamalı.
+     ────────────────────────────────────────────────────────────────────────
+     1) "okunamadi": satır var ama SONUÇ çıkarılamadı. Gerçek bir ayrıştırma
+        başarısızlığı; o testten bir şey öğrenemiyoruz.
+
+     2) "aralikYok": sonuç OKUNDU, ama raporda o test için referans aralığı
+        BASILMAMIŞ. Bu bir hata değil, raporun içeriği.
+
+        Ölçüldü (8 Ekim 2026, gerçek e-Nabız raporu): biyokimya ve idrar
+        panellerinde aralık var ("AFP 9.20 µg/L 0 - 8"), hemogram panelinde
+        YOK ("BASO# 0.05 x10^9/L"). Yani 28 hemogram testi için aralık
+        olmaması beklenen durum.
+
+     Eskiden ikisi tek listede toplanıp arayüzde "Okunamayan bilgiler"
+     başlığıyla gösteriliyordu. Sonuç: tamamen normal bir rapor, 28 satırlık
+     bir hata yığını gibi görünüyordu. Değerler zaten KAYDEDİLİYORDU, yalnızca
+     sunum yanlıştı. */
   tekil.forEach((t) => {
-    if (t.deger === null && !t.metinDeger) uyarilar.push(`${t.ad}: sonuç okunamadı`);
-    else if (t.refAlt === null && t.refUst === null && !t.siniflar.length && t.deger !== null) {
-      uyarilar.push(`${t.ad}: referans aralığı bulunamadı`);
+    if (t.deger === null && !t.metinDeger) {
+      uyarilar.push({ tur: 'okunamadi', ad: t.ad });
+    } else if (t.refAlt === null && t.refUst === null && !t.siniflar.length && t.deger !== null) {
+      uyarilar.push({ tur: 'aralikYok', ad: t.ad });
     }
   });
 

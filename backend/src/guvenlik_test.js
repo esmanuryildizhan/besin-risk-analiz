@@ -411,7 +411,7 @@ test('T05 Uyarı metni atlanan kişisel bilgiyi YAZMIYOR', () => {
   // ÖNCE uyarının ÜRETİLDİĞİNİ doğruluyoruz. Bu olmadan test boşlukta geçerdi:
   // nöbetçi tamamen kaldırılsa hiç uyarı üretilmez, "uyarıda ad yok" iddiası
   // da kendiliğinden doğru çıkardı. Ölçtüğünü sandığın şeyi ölçmeyen test.
-  dogru(sonuc.uyarilar.some((u) => u.includes('Kişisel bilgi')),
+  dogru(sonuc.uyarilar.some((u) => u && u.tur === 'kisiselAtlandi'),
     'kişisel bilgi uyarısı hiç üretilmedi — nöbetçi çalışmıyor olabilir');
   dogru(!uyarilar.includes('YILDIZHAN'), 'uyarıda ad soyad var');
   dogru(!uyarilar.includes('Kadın'), 'uyarıda cinsiyet var');
@@ -1111,6 +1111,38 @@ test('G89 Origin başlığı OLMAYAN istek geçiyor (tarayıcı değil)', () => 
   // engellemez, yalnızca meşru araçları kırardı.
   dogru(oturum.kaynakKabulEdilirMi('POST', undefined, KOKEN), 'Origin yokken reddedildi');
   dogru(oturum.kaynakKabulEdilirMi('POST', '', KOKEN), 'boş Origin reddedildi');
+});
+
+// --- Ayrıştırma uyarılarının türü (T12-T13) ---------------------------------
+//
+// Gerçek bir e-Nabız raporunda ölçüldü (8 Ekim 2026): biyokimya panelinde
+// referans aralığı basılıyor, hemogram panelinde BASILMIYOR. İkisi tek
+// listede toplanınca normal bir rapor 28 satırlık hata yığını gibi
+// görünüyordu ve kullanıcı uygulamanın bozuk olduğunu sanıyordu.
+
+test('T12 Aralığı olmayan test "okunamadı" sayılmıyor, DEĞERİ KORUNUYOR', () => {
+  const sonuc = ayristirici.satirlariAyristir([
+    ...gercekTestler(),
+    // Hemogram satırı: değer ve birim var, referans aralığı YOK.
+    satir(['BASO#', 120], ['0,05', 300], ['x10^9/L', 400]),
+  ]);
+  const baso = sonuc.testler.find((t) => t.ad === 'BASO#');
+  dogru(baso, 'aralığı olmayan test tamamen düşürüldü — değer kaybedildi');
+  esit(baso.deger, 0.05, 'değer yanlış okundu');
+
+  const aralikYok = sonuc.uyarilar.filter((u) => u && u.tur === 'aralikYok');
+  const okunamadi = sonuc.uyarilar.filter((u) => u && u.tur === 'okunamadi');
+  dogru(aralikYok.some((u) => u.ad === 'BASO#'), 'aralık yok uyarısı üretilmedi');
+  dogru(!okunamadi.some((u) => u.ad === 'BASO#'),
+    'aralığı olmayan test "okunamadı" diye işaretlendi — kullanıcıya hata gibi görünür');
+});
+
+test('T13 Aralığı OLAN test hiç uyarı üretmiyor', () => {
+  const sonuc = ayristirici.satirlariAyristir(gercekTestler());
+  const ilgili = sonuc.uyarilar.filter(
+    (u) => u && (u.ad === 'Glukoz' || u.ad === 'Hemoglobin'),
+  );
+  esit(ilgili.length, 0, `aralığı olan testler uyarı üretti: ${JSON.stringify(ilgili)}`);
 });
 
 Promise.all(sozler).then(() => {
