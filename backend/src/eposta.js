@@ -268,7 +268,7 @@ async function gonder(alici, konu, metin, gunlukNotu, html) {
 async function sifirlamaGonder(alici, baglanti, dakika) {
   return gonder(
     alici,
-    'Parola sıfırlama — Besin Risk Analiz Sistemi',
+    'Parola sıfırlama - Besin Risk Analiz Sistemi',
     [
       'Besin Risk Analiz Sistemi hesabınız için parola sıfırlama talebi alındı.',
       '',
@@ -308,7 +308,7 @@ async function sifirlamaGonder(alici, baglanti, dakika) {
 async function dogrulamaGonder(alici, baglanti, saat) {
   return gonder(
     alici,
-    'E-posta adresinizi doğrulayın — Besin Risk Analiz Sistemi',
+    'E-posta adresinizi doğrulayın - Besin Risk Analiz Sistemi',
     [
       'Besin Risk Analiz Sistemi\'nde bu adresle bir hesap oluşturuldu.',
       '',
@@ -350,7 +350,7 @@ async function dogrulamaGonder(alici, baglanti, saat) {
 async function zatenKayitliGonder(alici) {
   return gonder(
     alici,
-    'Hesabınız zaten var — Besin Risk Analiz Sistemi',
+    'Hesabınız zaten var - Besin Risk Analiz Sistemi',
     [
       'Bu adresle Besin Risk Analiz Sistemi\'ne kayıt olunmaya çalışıldı, ancak',
       'bu adrese ait bir hesap zaten var.',
@@ -392,7 +392,7 @@ async function zatenKayitliGonder(alici) {
 async function silmeUyarisiGonder(alici, kalanGun) {
   return gonder(
     alici,
-    'Hesabınız yakında silinecek — Besin Risk Analiz Sistemi',
+    'Hesabınız yakında silinecek - Besin Risk Analiz Sistemi',
     [
       'Besin Risk Analiz Sistemi hesabınıza uzun süredir giriş yapılmadı.',
       '',
@@ -487,7 +487,7 @@ function ayarlar() {
 async function supheliGirisGonder(alici) {
   return gonder(
     alici,
-    'Hesabınızda başarısız giriş denemeleri — Besin Risk Analiz',
+    'Hesabınızda başarısız giriş denemeleri - Besin Risk Analiz Sistemi',
     [
       'Besin Risk Analiz hesabınıza kısa süre içinde birden çok kez başarısız',
       'giriş denendi.',

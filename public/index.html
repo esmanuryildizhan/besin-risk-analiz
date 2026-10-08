@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#16a34a" />
     <meta
       name="description"
-      content="Besin Risk Analiz - Kişisel alerjen ve kalori takip uygulaması"
+      content="Besin Risk Analiz Sistemi - hastalık, alerji ve kan tahlili sonuçlarına göre besin risk değerlendirmesi"
     />
     <!-- SİMGELER
          Önceden hiç tanımlı değildi; tarayıcı varsayılan olarak /favicon.ico
@@ -19,6 +19,19 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>Besin Risk Analiz Sistemi</title>
+    <!-- BAĞLANTI ÖNİZLEMESİ (Open Graph)
+         Bağlantı bir sohbette paylaşıldığında uygulamalar bu etiketleri okuyup
+         başlık, açıklama ve görselle bir kart gösteriyor. Etiketler yokken
+         çıplak adres görünüyordu; çıplak adres hem güven vermiyor hem de bazı
+         uygulamalar onu bağlantıya çevirmiyor. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Besin Risk Analiz Sistemi" />
+    <meta property="og:title" content="Besin Risk Analiz Sistemi" />
+    <meta property="og:description" content="Hastalık, alerji ve kan tahlili sonuçlarına göre kişiselleştirilmiş besin risk değerlendirmesi." />
+    <meta property="og:image" content="%REACT_APP_SITE_URL%/logo512.png" />
+    <meta property="og:url" content="%REACT_APP_SITE_URL%/" />
+    <meta property="og:locale" content="tr_TR" />
+    <meta name="twitter:card" content="summary" />
     <!-- Temayı boyamadan önce uygular (FOUC engeli).
          Satır içi değil ayrı dosya: satır içi betik katı CSP ile çalışmıyor. -->
     <script src="%PUBLIC_URL%/tema-onyukleme.js"></script>

@@ -63,31 +63,63 @@ export default function App() {
   const [dogrulamaBileti, setDogrulamaBileti] = useState(() => biletiOku('/eposta-dogrula'));
 
   // Açılışta: meta verisini çek + token varsa oturumu geri yükle
+  //
+  // HER ŞEY try/finally İÇİNDE: burada fırlayan BİR hata bile setHazir(true)
+  // satırına ulaşılmasını engelliyordu ve uygulama sonsuza kadar
+  // "Yükleniyor..." ekranında kalıyordu — kullanıcı için "site açılmıyor".
+  // Depolama erişimi artık api.js'te korunuyor ama finally, bugün
+  // göremediğimiz başka bir hata için de ağ görevi görüyor: ne olursa olsun
+  // arayüz açılıyor, kullanıcı en kötü ihtimalle giriş ekranını görüyor.
   useEffect(() => {
     (async () => {
       try {
-        setMeta(await api.meta());
-      } catch (e) {
-        // backend kapalıysa giriş ekranı yine de açılsın
-      }
-      if (tokenAl()) {
         try {
-          const ben = await api.profilimiGetir();
-          setUser(ben);
-          setEkran('dashboard');
+          setMeta(await api.meta());
         } catch (e) {
-          tokenKaydet(null); // token geçersizse temizle
+          // backend kapalıysa giriş ekranı yine de açılsın
         }
+        if (tokenAl()) {
+          try {
+            const ben = await api.profilimiGetir();
+            setUser(ben);
+            setEkran('dashboard');
+          } catch (e) {
+            tokenKaydet(null); // token geçersizse temizle
+          }
+        }
+      } finally {
+        setHazir(true);
       }
-      setHazir(true);
     })();
   }, []);
+
+  // SUNUCU UYANMA SÜRESİ
+  //
+  // Render'ın ücretsiz katmanı 15 dakika istek almayan servisi uyutuyor;
+  // uyandırma yaklaşık bir dakika sürüyor. Bunu yazmazsak kullanıcı dönen
+  // çarkı "takıldı" diye okuyup sekmeyi kapatıyor.
+  const [uzunSuruyor, setUzunSuruyor] = useState(false);
+  useEffect(() => {
+    if (hazir) return undefined;
+    const sayac = setTimeout(() => setUzunSuruyor(true), 6000);
+    return () => clearTimeout(sayac);
+  }, [hazir]);
 
   const girisYapildi = (kullanici) => { setUser(kullanici); setEkran('dashboard'); };
   const cikisYap = () => { tokenKaydet(null); setUser(null); setEkran('login'); };
 
   if (!hazir) {
-    return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]"><Yukleniyor /></div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8F9FA] px-6 text-center">
+        <Yukleniyor />
+        {uzunSuruyor && (
+          <p className="max-w-sm text-sm text-gray-500 leading-relaxed" role="status">
+            Sunucu uykudan uyanıyor. Uzun süre kullanılmadığında ilk açılış
+            bir dakikayı bulabiliyor, lütfen sayfayı kapatmayın.
+          </p>
+        )}
+      </div>
+    );
   }
 
   // Sıfırlama bağlantısıyla gelindiyse her şeyin önüne geçiyor: kullanıcının

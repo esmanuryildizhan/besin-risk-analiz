@@ -65,3 +65,6 @@ yarn-error.log*
 # ve VERI_GIRISLERI.md dosyalarında anlatılıyor.
 # ---------------------------------------------------------------------------
 data-import/YAPILACAKLAR.md
+
+# Posta önizlemesi üretilmiş bir çıktı (node src/posta_onizleme.js).
+backend/posta-onizleme.html

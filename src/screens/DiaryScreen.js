@@ -177,7 +177,7 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
           <input
             value={arama}
             onChange={(e) => setArama(e.target.value)}
-            placeholder="Besin ara (ör. yoğurt) — veya aşağıdan kalori gir"
+            placeholder="Besin ara (ör. yoğurt) veya aşağıdan kalori gir"
             aria-label="Besin ara"
             className="p-3 outline-none text-sm w-full min-w-0 bg-transparent rounded-lg focus:ring-2 focus:ring-green-500 focus:ring-inset"
           />

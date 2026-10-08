@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Tarayıcı Denetimi - Besin Risk Analiz Sistemi</title>
+  <!--
+    NİYE BU SAYFA VAR
+    ─────────────────
+    Kullanıcılar "site bende açılmıyor" dediğinde elimizde hiçbir veri
+    olmuyordu: hangi tarayıcı, hangi sürüm, ne engelli? Bu sayfa bunu ölçüp
+    kullanıcıya gösteriyor ve kopyalanabilir hâle getiriyor.
+
+    NİYE ÇERÇEVE YOK: tam olarak uygulamanın açılmadığı durumda çalışması
+    gerekiyor. React, Tailwind, hiçbir paket kullanmıyor; yalnızca düz HTML,
+    satır içi stil ve tek bir küçük betik. Böylece uygulamanın açılamadığı
+    her yerde bu sayfa açılabiliyor.
+
+    AYRIMI ŞU: bu sayfa da açılmıyorsa sorun ağ/erişim düzeyindedir (alan adı
+    engelli, DNS çözmüyor). Bu sayfa açılıyor ama uygulama açılmıyorsa sorun
+    tarayıcı özelliklerinde ya da uygulamanın kendisindedir.
+
+    Betik AYRI DOSYADA: Content-Security-Policy satır içi betiğe izin
+    vermiyor (script-src 'self').
+  -->
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0; padding: 28px 18px; background: #f8f9fa; color: #1f2937;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      line-height: 1.6;
+    }
+    .sar { max-width: 620px; margin: 0 auto; }
+    h1 { font-size: 22px; color: #15803d; margin: 0 0 4px; }
+    .alt { margin: 0 0 24px; font-size: 14px; color: #6b7280; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 14px; overflow: hidden; }
+    th, td { text-align: left; padding: 12px 14px; font-size: 14px; border-bottom: 1px solid #f1f3f5; }
+    th { width: 46%; font-weight: 600; }
+    td.d { color: #4b5563; word-break: break-word; }
+    .ok { color: #15803d; font-weight: 700; }
+    .yok { color: #b91c1c; font-weight: 700; }
+    .nt { color: #6b7280; font-weight: 700; }
+    button, a.dug {
+      display: inline-block; margin: 20px 8px 0 0; padding: 13px 22px;
+      background: #15803d; color: #fff; border: 0; border-radius: 12px;
+      font-size: 15px; font-weight: 700; cursor: pointer; text-decoration: none;
+    }
+    a.ikincil { background: #fff; color: #15803d; border: 2px solid #15803d; }
+    #durum { font-size: 14px; color: #15803d; margin-top: 12px; min-height: 20px; }
+    pre {
+      white-space: pre-wrap; word-break: break-word; background: #f3f4f6;
+      padding: 12px; border-radius: 10px; font-size: 12px; color: #374151;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #111827; color: #e5e7eb; }
+      table { background: #1f2937; }
+      th, td { border-bottom-color: #374151; }
+      td.d { color: #d1d5db; }
+      pre { background: #374151; color: #e5e7eb; }
+      a.ikincil { background: #1f2937; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sar">
+    <h1>Tarayıcı Denetimi</h1>
+    <p class="alt">
+      Bu sayfa, Besin Risk Analiz Sistemi&#39;nin tarayıcınızda çalışması için
+      gereken şeyleri denetler. Sonucu kopyalayıp bize iletebilirsiniz.
+    </p>
+
+    <noscript>
+      <p class="yok">
+        JavaScript kapalı. Uygulama JavaScript olmadan çalışamaz; tarayıcı
+        ayarlarından etkinleştirmeniz gerekiyor.
+      </p>
+    </noscript>
+
+    <table>
+      <caption style="caption-side:top;text-align:left;padding:0 0 10px;font-size:13px;color:#6b7280;">
+        Denetim sonuçları
+      </caption>
+      <tbody id="sonuc">
+        <tr><td colspan="2" class="d">Denetleniyor&hellip;</td></tr>
+      </tbody>
+    </table>
+
+    <button id="kopyala" type="button">Sonucu kopyala</button>
+    <a class="dug ikincil" href="/">Uygulamaya dön</a>
+    <p id="durum" role="status"></p>
+
+    <details style="margin-top:22px;">
+      <summary style="cursor:pointer;font-size:13px;color:#6b7280;">Kopyalanacak metin</summary>
+      <pre id="metin"></pre>
+    </details>
+  </div>
+
+  <!-- data-api: üretimdeki API adresi. betikler/csp-kontrol.js bu değerin
+       vercel.json içindeki connect-src ile aynı kaldığını derleme zamanında
+       denetliyor; ayrışırsa derleme durur. -->
+  <script src="/uyumluluk.js" data-api="https://besin-risk-analiz.onrender.com"></script>
+</body>
+</html>

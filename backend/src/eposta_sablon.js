@@ -65,6 +65,23 @@ function cerceve({
               </tr>
             </table>` : '';
 
+  /* DÜĞMENİN ALTINDA AÇIK ADRES
+   *
+   * NİYE: kullanıcılar "bağlantıya tıklanmıyor" diyordu. Sebepleri birden
+   * fazla ve hiçbirini biz kontrol edemiyoruz:
+   *   - Bazı kurum/okul posta istemcileri HTML düğmeleri tıklanamaz kılıyor.
+   *   - Posta uygulaması içinden açılan tarayıcı bazen bağlantıyı yutuyor.
+   *   - Kullanıcı postayı başka bir cihazda açıp adresi elle yazmak istiyor.
+   * Açık adres yazılınca kullanıcının elinde her zaman bir yol kalıyor.
+   *
+   * word-break: uzun bilet adresi dar ekranda satırı taşırmasın.
+   */
+  const acikAdres = dugmeAdresi ? `
+            <p style="margin:16px 0 0;text-align:center;font-size:12px;color:${GRI};line-height:1.6;">
+              Düğme çalışmazsa bu adresi tarayıcınıza yapıştırın:<br>
+              <span style="word-break:break-all;color:#374151;">${kacir(dugmeAdresi)}</span>
+            </p>` : '';
+
   const sure = sureNotu ? `
             <p style="margin:0;text-align:center;font-size:13px;color:${GRI};">${kacir(sureNotu)}</p>` : '';
 
@@ -103,7 +120,7 @@ function cerceve({
             <h1 style="margin:0 0 20px;font-size:24px;line-height:1.3;color:${YESIL};text-align:center;">
               ${kacir(baslik)}
             </h1>
-            ${govde}${dugme}${sure}${dip}
+            ${govde}${dugme}${sure}${acikAdres}${dip}
           </td>
         </tr>
       </table>

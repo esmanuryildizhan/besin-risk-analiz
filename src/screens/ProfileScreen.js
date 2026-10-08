@@ -390,7 +390,7 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
               </li>
               <li>
                 Uygulamada beliren 6 haneli kodu bu sayfaya girin. Kod doğrulanmadan
-                iki aşamalı doğrulama <strong>açılmaz</strong> — yanlış kurulum
+                iki aşamalı doğrulama <strong>açılmaz</strong>, yanlış kurulum
                 yüzünden kendi hesabınızdan kilitlenmeyesiniz diye.
               </li>
               <li>

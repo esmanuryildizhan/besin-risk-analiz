@@ -5,13 +5,76 @@
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 const TOKEN_ANAHTARI = 'bras_token';
 
+/* ─────────────────────────── DEPOLAMA ───────────────────────────
+ *
+ * localStorage'a DOKUNMAK HATA FIRLATABİLİR. Sadece "yazılamaz" değil,
+ * okumanın kendisi de patlar:
+ *   - Chrome/Edge: Ayarlar > Çerezler > "Tüm çerezleri engelle" seçiliyse
+ *     erişim SecurityError fırlatır.
+ *   - Safari: "Tüm çerezleri engelle" açıkken aynı durum.
+ *   - Bazı uygulama içi tarayıcılar (sosyal medya uygulamalarının kendi
+ *     tarayıcıları) depolamayı kısıtlı açar.
+ *   - Kurumsal/okul cihazlarında ilke ile kapatılabiliyor.
+ *
+ * ÖNCEDEN NE OLUYORDU: tokenAl() doğrudan localStorage'a gidiyordu ve
+ * App.js'in açılış akışı onu try bloğunun DIŞINDA çağırıyordu. Hata
+ * fırlayınca akış yarıda kesiliyor, "hazır" durumu hiç kurulmuyor ve
+ * uygulama sonsuza kadar "Yükleniyor..." ekranında kalıyordu. Kullanıcı
+ * tarafında bunun adı "site bende açılmıyor" oluyor, üstelik hata mesajı
+ * da görünmüyordu.
+ *
+ * ÇÖZÜM: depolama bir kez yoklanıyor; çalışmıyorsa jeton BELLEKTE
+ * tutuluyor. Uygulama tamamen çalışır kalıyor, tek fark oturumun sekme
+ * kapanınca bitmesi. Kullanıcıya bunu giriş ekranında söylüyoruz
+ * (depolamaCalisiyorMu).
+ */
+let bellektekiJeton = null;
+let depoDurumu = null; // null = henüz yoklanmadı
+
+function depoCalisiyor() {
+  if (depoDurumu !== null) return depoDurumu;
+  try {
+    // Sadece okumak yetmiyor: bazı tarayıcılar okumaya izin verip yazmayı
+    // engelliyor (eski iOS'ta gizli sekme böyleydi). Bu yüzden gerçek bir
+    // yazma denemesi yapılıyor ve iz bırakmadan siliniyor.
+    const deneme = '__bras_depo_denemesi__';
+    window.localStorage.setItem(deneme, '1');
+    window.localStorage.removeItem(deneme);
+    depoDurumu = true;
+  } catch (e) {
+    depoDurumu = false;
+  }
+  return depoDurumu;
+}
+
+/** Arayüz, oturumun kalıcı olup olmayacağını kullanıcıya bildirmek için kullanıyor. */
+export function depolamaCalisiyorMu() {
+  return depoCalisiyor();
+}
+
 export function tokenAl() {
-  return localStorage.getItem(TOKEN_ANAHTARI);
+  if (!depoCalisiyor()) return bellektekiJeton;
+  try {
+    return window.localStorage.getItem(TOKEN_ANAHTARI);
+  } catch (e) {
+    // Yoklama sırasında çalışıyordu ama şimdi çalışmıyor (kullanıcı ayarı
+    // sekme açıkken değiştirmiş olabilir). Bellek yedeğine düşüyoruz.
+    depoDurumu = false;
+    return bellektekiJeton;
+  }
 }
 
 export function tokenKaydet(token) {
-  if (token) localStorage.setItem(TOKEN_ANAHTARI, token);
-  else localStorage.removeItem(TOKEN_ANAHTARI);
+  // Bellek her durumda güncelleniyor: depolama sonradan bozulsa bile
+  // oturum aynı sekmede ayakta kalsın.
+  bellektekiJeton = token || null;
+  if (!depoCalisiyor()) return;
+  try {
+    if (token) window.localStorage.setItem(TOKEN_ANAHTARI, token);
+    else window.localStorage.removeItem(TOKEN_ANAHTARI);
+  } catch (e) {
+    depoDurumu = false;
+  }
 }
 
 /**

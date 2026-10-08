@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import {
   Apple, ChevronRight, Loader2, Lock, Mail, Shield,
 } from 'lucide-react';
-import { api, tokenKaydet } from '../api';
+import { api, tokenKaydet, depolamaCalisiyorMu } from '../api';
 import { HataKutusu } from '../components/ortak';
 import { KvkkBaglantilari } from '../kvkk/KvkkBilesenleri';
 
@@ -203,6 +203,24 @@ export const LoginScreen = ({ onLogin, onRegister, onSifremiUnuttum }) => {
               Hesabınız yok mu? Hemen kayıt olun
             </button>
           </div>
+
+          {/* DEPOLAMA KAPALIYSA UYAR
+              Tarayıcı site verisini engelliyorsa uygulama çalışıyor ama oturum
+              bellekte tutuluyor ve sekme kapanınca bitiyor. Bunu söylemezsek
+              kullanıcı "sürekli çıkış yapıyor" diye düşünüyor ve sebebini
+              bulamıyor. Ayrı bir denetim sayfasına yönlendiriyoruz. */}
+          {!depolamaCalisiyorMu() && (
+            <div
+              role="status"
+              className="text-xs text-gray-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed"
+            >
+              Tarayıcınız site verisini engelliyor. Giriş yapabilirsiniz, ancak
+              sekmeyi kapattığınızda oturumunuz sona erer.{' '}
+              <a href="/uyumluluk.html" className="font-bold text-green-800 underline">
+                Tarayıcımı denetle
+              </a>
+            </div>
+          )}
 
           {/* Aydınlatma yükümlülüğü onaya bağlı değildir: metinler giriş
               yapmadan da okunabilir olmalı. */}

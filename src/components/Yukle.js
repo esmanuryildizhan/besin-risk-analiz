@@ -80,7 +80,7 @@ export const UygulamayiYukle = () => {
           <p className="text-sm text-gray-700 mb-5 leading-relaxed">
             Telefonunuzun ana ekranına ya da bilgisayarınıza kısayol olarak
             ekleyebilirsiniz; adres çubuğu olmadan, ayrı bir pencerede açılır.
-            <strong> Zorunlu değil</strong> — tarayıcıdan da her özelliği
+            <strong> Zorunlu değil</strong>, tarayıcıdan da her özelliği
             kullanabilirsiniz.
           </p>
           <button

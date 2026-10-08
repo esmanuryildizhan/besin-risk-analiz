@@ -172,7 +172,7 @@ const BesinDetay = ({ besin, onKapat }) => {
 
                 {b.porsiyonda === null ? (
                   <p className="text-sm text-gray-500">
-                    Bu besinde <strong>{b.besinOgesi}</strong> ölçülmemiş — değeri bilmiyoruz.
+                    Bu besinde <strong>{b.besinOgesi}</strong> ölçülmemiş, değeri bilmiyoruz.
                     Ölçülmemiş olması &ldquo;yok&rdquo; demek değildir.
                   </p>
                 ) : (

@@ -19,7 +19,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "a11y": "eslint --no-eslintrc -c .eslintrc.a11y.js --ext .js src/",
-    "prebuild": "node betikler/csp-kontrol.js"
+    "prebuild": "node betikler/csp-kontrol.js",
+    "test:arayuz": "node betikler/arayuz_test.js"
   },
   "eslintConfig": {
     "extends": [
