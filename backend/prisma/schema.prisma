@@ -34,6 +34,10 @@ model User {
   email        String   @unique
   passwordHash String
   gender       String?
+  /// Seçilen avatar anahtarı ("vanKedisi", "aslan"...). Kişisel veri değil,
+  /// şifrelenmiyor: kullanıcının seçtiği bir simge. Veritabanında tutuluyor
+  /// ki cihaz değiştirince kaybolmasın.
+  avatar       String?
   diet         String?
 
   // GÜNLÜK HEDEFLER — kullanıcının kendi kararı.

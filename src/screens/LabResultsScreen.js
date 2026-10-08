@@ -163,6 +163,11 @@ export const LabResultsScreen = () => {
   const [secimler, setSecimler] = useState({});
   const [islemde, setIslemde] = useState(false);
   const [karsilastirAcik, setKarsilastirAcik] = useState(false);
+  // Karşılaştırma kapsamı. Eskiden sabit "son 6" idi ve kullanıcı
+  // değiştiremiyordu; ne kadarını karşılaştırmak istediği kişiye göre
+  // değişir (son iki sonucu kıyaslamak ile bir yıllık eğilime bakmak
+  // farklı işler).
+  const [kapsam, setKapsam] = useState({ tur: 'adet', deger: 6 });
   const [acikTarih, setAcikTarih] = useState(null);
   const dosyaRef = useRef(null);
 
@@ -233,10 +238,30 @@ export const LabResultsScreen = () => {
   // --- Karşılaştırma tablosu: aynı testin tarihlere göre değerleri -----------
   // Yalnızca BİRDEN FAZLA tarihte ölçülmüş testler gösteriliyor; tek seferlik
   // bir sonucun "karşılaştırması" olmaz.
+  // Kapsam seçenekleri. Sayıya göre ve zamana göre AYRI iki grup: "son 3
+  // tahlil" ile "son 3 ay" farklı sorular ve kullanıcı hangisini sorduğunu
+  // bilerek seçmeli.
+  const ADET_SECENEKLERI = [2, 3, 5, 10];
+  const AY_SECENEKLERI = [
+    { ay: 0.25, ad: '1 hafta' }, { ay: 1, ad: '1 ay' }, { ay: 3, ad: '3 ay' },
+    { ay: 6, ad: '6 ay' }, { ay: 12, ad: '12 ay' },
+  ];
+
   const karsilastirma = (() => {
-    const tarihler = tahliller.map((t) => t.tarih).slice(0, 6);
+    // Sunucu tahlilleri tarihe göre AZALAN sırada veriyor (en yeni önce).
+    let secilen;
+    if (kapsam.tur === 'tumu') {
+      secilen = tahliller;
+    } else if (kapsam.tur === 'adet') {
+      secilen = tahliller.slice(0, kapsam.deger);
+    } else {
+      // Ay sayısı gün'e çevriliyor; 1 hafta için 0,25 ay = 7,6 gün.
+      const sinir = Date.now() - kapsam.deger * 30.44 * 24 * 60 * 60 * 1000;
+      secilen = tahliller.filter((t) => new Date(t.tarih).getTime() >= sinir);
+    }
+    const tarihler = secilen.map((t) => t.tarih);
     const harita = new Map();
-    tahliller.slice(0, 6).forEach((grup) => {
+    secilen.forEach((grup) => {
       grup.testler.forEach((t) => {
         if (!harita.has(t.testName)) harita.set(t.testName, {});
         harita.get(t.testName)[grup.tarih] = t;
@@ -245,8 +270,23 @@ export const LabResultsScreen = () => {
     const satirlar = [...harita.entries()]
       .filter(([, degerler]) => Object.keys(degerler).length >= 2)
       .sort((a, b) => a[0].localeCompare(b[0], 'tr'));
-    return { tarihler, satirlar };
+    return { tarihler, satirlar, secilenSayisi: secilen.length };
   })();
+
+  const kapsamDugmesi = (etiket, secili, tikla) => (
+    <button
+      key={etiket}
+      type="button"
+      onClick={tikla}
+      aria-pressed={secili}
+      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition
+        ${secili
+          ? 'bg-green-700 text-white border-green-700'
+          : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
+    >
+      {etiket}
+    </button>
+  );
 
   return (
     <div className="p-6 sm:p-10 max-w-[1200px] mx-auto">
@@ -263,6 +303,36 @@ export const LabResultsScreen = () => {
             <p className="text-sm text-gray-500 mb-4">
               Aynı testin tarihlere göre değerleri. Renkler laboratuvarınızın kendi aralığından geliyor.
             </p>
+
+            <div className="mb-5 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-gray-500 uppercase mr-1">Son</span>
+                {ADET_SECENEKLERI.map((sayi) => kapsamDugmesi(
+                  `${sayi} tahlil`,
+                  kapsam.tur === 'adet' && kapsam.deger === sayi,
+                  () => setKapsam({ tur: 'adet', deger: sayi }),
+                ))}
+                {kapsamDugmesi(
+                  'Tümü',
+                  kapsam.tur === 'tumu',
+                  () => setKapsam({ tur: 'tumu' }),
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-gray-500 uppercase mr-1">Süre</span>
+                {AY_SECENEKLERI.map(({ ay, ad }) => kapsamDugmesi(
+                  ad,
+                  kapsam.tur === 'sure' && kapsam.deger === ay,
+                  () => setKapsam({ tur: 'sure', deger: ay }),
+                ))}
+              </div>
+              <p className="text-xs text-gray-600" aria-live="polite">
+                {karsilastirma.secilenSayisi === 0
+                  ? 'Seçilen aralıkta tahlil yok.'
+                  : `${karsilastirma.secilenSayisi} tahlil karşılaştırılıyor · `
+                    + `${karsilastirma.satirlar.length} test birden fazla tarihte ölçülmüş.`}
+              </p>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead className="text-xs text-gray-600 uppercase bg-gray-50">

@@ -5,13 +5,14 @@
 import React, { useRef, useState } from 'react';
 import {
   Activity, CheckCircle, ChevronDown, Clock, Info, KeyRound, Loader2, Monitor,
-  Moon, Palette, Save, Shield, Sun, User,
+  Moon, Palette, Save, Shield, Smile, Sun, User,
 } from 'lucide-react';
 import { api, tokenKaydet } from '../api';
 import { HataKutusu, SecimKutusu } from '../components/ortak';
 import { HesapSilme, VeriIndirme } from '../kvkk/KvkkBilesenleri';
 import { kayitliTema, temayiSec } from '../tema';
 import { OnayKutusu, ParolaKurallari } from '../components/ortak';
+import { AVATARLAR, Avatar } from '../components/Avatarlar';
 import { tumKurallarTamamMi } from '../parolaKurali';
 
 /**
@@ -386,6 +387,72 @@ const IkiAsamaliDogrulama = ({ user, onGuncelle }) => {
   );
 };
 
+/**
+ * Avatar seçimi.
+ *
+ * NİYE SUNUCUDA SAKLANIYOR (tema localStorage'dayken): tema bir cihaz
+ * tercihi — aynı kişi telefonda karanlık, masaüstünde açık isteyebilir.
+ * Avatar ise kişinin KENDİSİNE ait; cihaz değiştirince kaybolması yanlış
+ * olurdu. Bu yüzden profil alanı.
+ *
+ * Seçim ANINDA kaydediliyor, "Kaydet" beklemiyor: tek tıklık bir tercih
+ * için ayrı bir kaydetme adımı gereksiz, üstelik bu sekmede kaydet düğmesi
+ * yok.
+ */
+const AvatarSecimi = ({ user, onGuncelle }) => {
+  const [bekleyen, setBekleyen] = useState(null);
+  const [hata, setHata] = useState('');
+
+  const sec = async (kod) => {
+    setHata(''); setBekleyen(kod);
+    try {
+      onGuncelle(await api.avatarSec(kod));
+    } catch (e) {
+      setHata(e.message);
+    } finally {
+      setBekleyen(null);
+    }
+  };
+
+  const secenekler = [{ kod: null, ad: 'Baş harfler', Ciz: null }, ...AVATARLAR];
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-200 p-8">
+      <h2 className="text-xl font-bold text-gray-800 flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+        <div className="bg-green-100 p-3 rounded-2xl text-green-700"><Smile size={22} /></div> Avatarınız
+      </h2>
+      <fieldset>
+        <legend className="text-xs font-bold text-gray-500 mb-4 block uppercase">
+          Yan menüde görünecek simge
+        </legend>
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+          {secenekler.map(({ kod, ad }) => {
+            const secili = (user.avatar || null) === kod;
+            return (
+              <label
+                key={kod || 'bosluk'}
+                className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 cursor-pointer transition
+                  ${secili ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'}
+                  ${bekleyen === kod ? 'opacity-50' : ''}`}
+              >
+                <input
+                  type="radio" name="avatar" value={kod || ''} checked={secili}
+                  onChange={() => sec(kod)} className="sr-only"
+                />
+                <Avatar kod={kod} ad={user.name} soyad={user.surname} boyut={52} />
+                <span className={`text-xs text-center leading-tight ${secili ? 'font-bold text-green-700' : 'text-gray-600'}`}>
+                  {ad}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+        <HataKutusu mesaj={hata} />
+      </fieldset>
+    </div>
+  );
+};
+
 const SEKMELER = [
   { kod: 'profil', ad: 'Profil', ikon: User },
   { kod: 'guvenlik', ad: 'Güvenlik', ikon: Shield },
@@ -611,6 +678,7 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
       <div role="tabpanel" id="panel-gorunum" aria-labelledby="sekme-gorunum" hidden={sekme !== 'gorunum'}>
         <div className="space-y-8">
           <GorunumAyari />
+          <AvatarSecimi user={user} onGuncelle={onGuncelle} />
         </div>
       </div>
 

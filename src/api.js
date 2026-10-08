@@ -115,6 +115,9 @@ export const api = {
   // --- ŞİFRE SIFIRLAMA ---
   // Sunucu, adres kayıtlı olsun olmasın AYNI yanıtı veriyor; arayüz de bu
   // yüzden "posta gitti" demiyor, "kayıtlıysa gitti" diyor.
+  avatarSec: (avatar) =>
+    istek('/api/me', { method: 'PUT', body: JSON.stringify({ avatar }) }),
+
   parolaDegistir: (mevcutParola, yeniParola, kod) =>
     istek('/api/parola/degistir', {
       method: 'POST',

@@ -569,6 +569,7 @@ function kullaniciyiDondur(user) {
     waterGoalL: user.waterGoalL,
     email: user.email,
     gender: user.gender,
+    avatar: user.avatar,
     diet: user.diet,
     allergies: user.allergies ? cozVeDenetle(user.allergies, 'alerji', user.id) : [],
     diseases: user.diseases ? cozVeDenetle(user.diseases, 'hastalık', user.id) : [],
@@ -1289,8 +1290,20 @@ app.get('/api/me', girisGerekli, (req, res) => {
 app.put('/api/me', girisGerekli, async (req, res) => {
   try {
     const {
-      name, surname, gender, diet, allergies, diseases, kcalGoal, waterGoalL,
+      name, surname, gender, diet, allergies, diseases, kcalGoal, waterGoalL, avatar,
     } = req.body;
+
+    // AVATAR BEYAZ LİSTEDEN. İstemciden gelen metni olduğu gibi yazmak,
+    // veritabanına keyfi içerik koymanın (ve ileride arayüzde render
+    // edilirse XSS'in) kapısı olurdu. Geçerli olmayan değer sessizce
+    // yok sayılmıyor, hata dönüyor: kullanıcı seçimi kaydedilmediğini bilsin.
+    const AVATARLAR = [
+      'vanKedisi', 'turuncuKedi', 'siyahKedi', 'griKedi',
+      'sibiryaKurdu', 'kangal', 'civciv', 'balik', 'kurt', 'aslan', 'kartal',
+    ];
+    if (avatar !== undefined && avatar !== null && !AVATARLAR.includes(avatar)) {
+      return res.status(400).json({ error: 'Geçersiz avatar seçimi.' });
+    }
     const id = req.kullanici.id;
 
     // Alerji/hastalık listeleri: eskisini silip yenisini yazıyoruz (en basit yol)
@@ -1312,6 +1325,9 @@ app.put('/api/me', girisGerekli, async (req, res) => {
         name: name ?? undefined,
         surname: surname ?? undefined,
         gender: gender ?? undefined,
+        // null GÖNDERİLEBİLİR: kullanıcı avatarı kaldırıp baş harflere
+        // dönmek isteyebilir. O yüzden ?? undefined kalıbı kullanılmıyor.
+        avatar: avatar === undefined ? undefined : avatar,
         diet: diet ?? undefined,
         // Hedefler: null GÖNDERİLEBİLİR (kullanıcı hedefini silmek isteyebilir),
         // o yüzden ?? undefined kalıbı burada kullanılmıyor. Alan hiç

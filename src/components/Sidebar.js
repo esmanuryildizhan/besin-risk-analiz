@@ -22,6 +22,7 @@ import {
   Search, Calendar, X, Settings, Activity, Menu, HelpCircle,
 } from 'lucide-react';
 import { MenuButton } from './ortak';
+import { Avatar } from './Avatarlar';
 
 export const Sidebar = ({ aktif, git, user, cikisYap, acik, setAcik, onTanitim }) => {
   const cekmeceRef = useRef(null);
@@ -86,9 +87,7 @@ export const Sidebar = ({ aktif, git, user, cikisYap, acik, setAcik, onTanitim }
             <X size={20} aria-hidden="true" />
             <span className="sr-only">Menüyü kapat</span>
           </button>
-          <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold text-2xl mb-4 uppercase">
-            {(user.name || '?').charAt(0)}{(user.surname || '').charAt(0)}
-          </div>
+          <Avatar kod={user.avatar} ad={user.name} soyad={user.surname} boyut={80} className="mb-4" />
           <div className="font-bold text-gray-800 text-lg">{user.name} {user.surname}</div>
         </div>
 
