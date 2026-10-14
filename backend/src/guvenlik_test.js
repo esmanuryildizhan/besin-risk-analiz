@@ -76,7 +76,14 @@ test('G03 Aynı anahtar her seferinde FARKLI şifreleniyor (rastgele IV)', () =>
 
 test('G04 Kurcalanmış kayıt çözülmüyor', () => {
   const s = totp.sifrele(totp.yeniAnahtar(), TEMEL);
-  esit(totp.coz(s.slice(0, -2) + 'ff', TEMEL), null, 'kurcalanmış veri kabul edildi');
+  // Son karakteri SABİT bir değerle ('ff') değiştirmek kırılgandı: kayıt
+  // zaten 'ff' ile bitiyorsa hiçbir şey değişmiyor, veri bozulmamış oluyor
+  // ve test ~256 çalıştırmada bir haksız yere düşüyordu. Artık son karakter
+  // KENDİSİNDEN FARKLI bir onaltılık basamakla değiştiriliyor, yani her
+  // durumda gerçekten kurcalanmış bir kayıt sınanıyor.
+  const sonHarf = s.slice(-1);
+  const yeniHarf = sonHarf === '0' ? '1' : '0';
+  esit(totp.coz(s.slice(0, -1) + yeniHarf, TEMEL), null, 'kurcalanmış veri kabul edildi');
 });
 
 test('G05 Yanlış anahtarla çözülmüyor', () => {
@@ -1006,7 +1013,8 @@ test('G81 Arayüzdeki parola kuralı kopyası sunucuyla AYNI', () => {
   const sunucuKodlari = [...new Set([
     ...parola.parolaDenetle('').kodlar,
     ...parola.parolaDenetle('aaa').kodlar,
-    ...parola.parolaDenetle('abcdefghij').kodlar,
+    ...parola.parolaDenetle('abcdefghij').kodlar,   // büyük harf eksiği
+    ...parola.parolaDenetle('ABCDEFGHIJ').kodlar,   // küçük harf eksiği
     ...parola.parolaDenetle('x'.repeat(250)).kodlar,
     ...parola.parolaDenetle('esma1234!xyz', { ad: 'Esma' }).kodlar,
   ])];
@@ -1143,6 +1151,120 @@ test('T13 Aralığı OLAN test hiç uyarı üretmiyor', () => {
     (u) => u && (u.ad === 'Glukoz' || u.ad === 'Hemoglobin'),
   );
   esit(ilgili.length, 0, `aralığı olan testler uyarı üretti: ${JSON.stringify(ilgili)}`);
+});
+
+// --- Tahlil dışı PDF denetimi (T14-T18) -------------------------------------
+//
+// Yaşanmış durum: kullanıcı tahlil yerine bir özgeçmiş PDF'i yükledi ve
+// ayrıştırıcı "etiket + sayı" gören satırları test sandı. Ekranda "15:00",
+// "Oriana" gibi satırlar kaydedilebilir sonuç gibi göründü. Bir sağlık
+// uygulamasında bu veri kirliliğinden fazlası: kullanıcı onları kaydeder ve
+// sonra o veriye göre değerlendirme görür.
+
+function ozgecmisSatirlari() {
+  return [
+    satir(['Oriana Teknoloji', 120], ['2021', 300]),
+    satir(['from', 120], ['15:00', 300]),
+    satir(['Referanslar', 120], ['3', 300]),
+    satir(['Optimizasyon', 120], ['2', 300]),
+  ];
+}
+
+test('T14 Tahlil olmayan PDF reddediliyor', () => {
+  const r = ayristirici.satirlariAyristir(ozgecmisSatirlari()).rapor;
+  esit(r.uygun, false, 'özgeçmiş tahlil raporu sayıldı');
+  esit(r.olcum, 0, 'ölçüm satırı sayısı');
+});
+
+test('T15 Gerçek tahlil raporu kabul ediliyor', () => {
+  const r = ayristirici.satirlariAyristir([
+    ...gercekTestler(),
+    satir(['Kreatinin', 120], ['0,8', 300], ['mg/dL', 400], ['0.5-1.1', 500]),
+  ]).rapor;
+  esit(r.uygun, true, 'gerçek tahlil reddedildi');
+  dogru(r.olcum >= 3, `ölçüm satırı az sayıldı: ${r.olcum}`);
+});
+
+test('T16 Tek testlik rapor, belgede tahlil kelimesi varsa kabul', () => {
+  // Yalnızca D vitamini istenmiş meşru bir rapor üç satıra ulaşamaz.
+  // Anahtar kelime bu durumda ikinci yol.
+  const r = ayristirici.satirlariAyristir([
+    satir(['Tahlil Raporu', 120], ['x', 300]),
+    satir(['25-OH D Vitamini', 120], ['18,4', 300], ['µg/L', 400], ['30-100', 500]),
+  ]).rapor;
+  esit(r.uygun, true, 'tek testlik rapor reddedildi');
+  esit(r.anahtar, true, 'anahtar kelime bulunamadı');
+});
+
+test('T17 Tek ölçüm var ama tahlil kelimesi yoksa kabul edilmiyor', () => {
+  // Faturadaki "12,5 kg" gibi tek başına bir ölçüm, rapor saymaya yetmemeli.
+  const r = ayristirici.satirlariAyristir([
+    satir(['Net ağırlık', 120], ['12,5', 300], ['kg', 400]),
+    satir(['Sipariş', 120], ['3', 300]),
+  ]).rapor;
+  esit(r.uygun, false, 'tek ölçümlü belge rapor sayıldı');
+});
+
+test('T18 "Referanslar" tek başına anahtar kelime sayılmıyor', () => {
+  // Özgeçmişlerde çok geçiyor. Anahtar kelime iki sözcüklü: "referans aralığı".
+  const r = ayristirici.satirlariAyristir([
+    satir(['Referanslar', 120], ['bkz.', 300]),
+    satir(['Deneyim', 120], ['5', 300], ['yıl', 400]),
+  ]).rapor;
+  esit(r.anahtar, false, '"Referanslar" anahtar kelime sayıldı');
+  esit(r.uygun, false, 'belge rapor sayıldı');
+});
+
+// --- Avatar listesi ayrışması (G90) -----------------------------------------
+
+test('G90 Avatar listesi arayüz ile sunucuda AYNI', () => {
+  // Arayüzde seçilebilen ama sunucuda beyaz listede olmayan bir avatar,
+  // kullanıcıya sebebi anlaşılmaz bir "Geçersiz avatar seçimi" hatası
+  // verirdi. Tersi daha kötü: sunucu kabul eder, arayüz göstermez.
+  const fsm = require('fs');
+  const pth = require('path');
+
+  const sunucu = fsm.readFileSync(pth.join(__dirname, 'index.js'), 'utf8');
+  const blok = sunucu.match(/const AVATARLAR = \[([\s\S]*?)\];/);
+  dogru(blok, 'sunucuda AVATARLAR listesi bulunamadı');
+  const sunucuKodlari = [...blok[1].matchAll(/'([A-Za-z]+)'/g)].map((m) => m[1]).sort();
+
+  const arayuzYolu = pth.join(__dirname, '..', '..', 'src', 'components', 'Avatarlar.js');
+  const arayuz = fsm.readFileSync(arayuzYolu, 'utf8');
+  const arayuzKodlari = [...arayuz.matchAll(/\{ kod: '([A-Za-z]+)'/g)].map((m) => m[1]).sort();
+
+  dogru(arayuzKodlari.length >= 5, `arayüzde avatar bulunamadı: ${arayuzKodlari.length}`);
+  esit(arayuzKodlari.join(','), sunucuKodlari.join(','), 'avatar listeleri ayrışmış');
+
+  // Her kodun karşılığında gerçekten bir görsel dosyası olmalı; yoksa
+  // kullanıcı boş bir kutu görür.
+  const klasor = pth.join(__dirname, '..', '..', 'public', 'avatarlar');
+  const eksik = arayuzKodlari.filter((kod) => !fsm.existsSync(pth.join(klasor, `${kod}.png`)));
+  esit(eksik.join(','), '', 'görsel dosyası olmayan avatar');
+});
+
+// --- Parolada büyük/küçük harf (G91-G92) ------------------------------------
+
+test('G91 Yalnızca küçük harfli parola reddediliyor', () => {
+  const r = parola.parolaDenetle('sadecekucuk1!');
+  esit(r.gecerli, false, 'küçük harfli parola kabul edildi');
+  dogru(r.kodlar.includes('buyukharf'), `kodlar: ${r.kodlar.join(',')}`);
+});
+
+test('G92 Yalnızca büyük harfli parola reddediliyor, karışık olan geçiyor', () => {
+  const buyuk = parola.parolaDenetle('SADECEBUYUK1!');
+  esit(buyuk.gecerli, false, 'büyük harfli parola kabul edildi');
+  dogru(buyuk.kodlar.includes('kucukharf'), `kodlar: ${buyuk.kodlar.join(',')}`);
+
+  // Türkçe harfler de doğru sınıflanmalı: Ş büyük, ı küçük.
+  const turkce = parola.parolaDenetle('Şahane.Parola1');
+  esit(turkce.gecerli, true, `Türkçe parola reddedildi: ${turkce.eksikler.join(' ')}`);
+
+  // Harf hiç yoksa büyük/küçük şartı AYRICA yazılmamalı: kullanıcıya üç
+  // ayrı satır göstermek yerine tek bir "harf içermeli" diyoruz.
+  const harfsiz = parola.parolaDenetle('9876543!!@');
+  dogru(harfsiz.kodlar.includes('harf'), 'harf eksiği bildirilmedi');
+  dogru(!harfsiz.kodlar.includes('buyukharf'), 'harfsiz parolada büyük harf satırı da çıktı');
 });
 
 Promise.all(sozler).then(() => {

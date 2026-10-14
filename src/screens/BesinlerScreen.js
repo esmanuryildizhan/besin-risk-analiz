@@ -271,10 +271,10 @@ export const DashboardScreen = ({ user }) => {
     return () => clearTimeout(zamanlayici.current);
   }, [arama, kategori, getir]);
 
-  const profilOzeti = [
-    ...(user.diseases || []).length ? [`${user.diseases.length} hastalık`] : [],
-    ...(user.allergies || []).length ? [`${user.allergies.length} alerji`] : [],
-  ].join(' • ');
+  // Profilde değerlendirilecek bir şey var mı? SAYI gösterilmiyor:
+  // kullanıcı kaç hastalığı olduğunu zaten biliyor, her ekranda yüzüne
+  // söylenmesi rahatsız edici.
+  const profilDolu = Boolean((user.diseases || []).length || (user.allergies || []).length);
 
   return (
     <div className="p-6 sm:p-10 max-w-[1500px] mx-auto">
@@ -283,9 +283,9 @@ export const DashboardScreen = ({ user }) => {
       <div className="mb-8">
         <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">Besin Ara</h1>
         <p className="text-gray-500 text-lg">
-          {profilOzeti
-            ? `Sonuçlar profilinize göre değerlendiriliyor (${profilOzeti}).`
-            : 'Profilinizde hastalık/alerji yok; genel bilgi gösteriliyor.'}
+          {profilDolu
+            ? 'Sonuçlar profilinize göre değerlendiriliyor.'
+            : 'Profilinizde hastalık ya da alerji yok; genel bilgi gösteriliyor.'}
         </p>
       </div>
 

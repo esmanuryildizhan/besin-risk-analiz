@@ -1297,9 +1297,14 @@ app.put('/api/me', girisGerekli, async (req, res) => {
     // veritabanına keyfi içerik koymanın (ve ileride arayüzde render
     // edilirse XSS'in) kapısı olurdu. Geçerli olmayan değer sessizce
     // yok sayılmıyor, hata dönüyor: kullanıcı seçimi kaydedilmediğini bilsin.
+    // Liste src/components/Avatarlar.js ile aynı olmak zorunda.
+    // backend/src/guvenlik_test.js içindeki G90 ikisinin ayrışmadığını
+    // denetliyor: arayüzde seçilebilen bir avatar sunucuda reddedilirse
+    // kullanıcı sebebini anlamadan "Geçersiz avatar seçimi" hatası alır.
     const AVATARLAR = [
-      'vanKedisi', 'turuncuKedi', 'siyahKedi', 'griKedi',
-      'sibiryaKurdu', 'kangal', 'civciv', 'balik', 'kurt', 'aslan', 'kartal',
+      'gencAdam', 'gencKadin', 'basortuluGenc',
+      'sakalliAdam', 'gozlukluKadin', 'basortuluKadin',
+      'buyukbaba', 'buyukanne', 'basortuluBuyukanne',
     ];
     if (avatar !== undefined && avatar !== null && !AVATARLAR.includes(avatar)) {
       return res.status(400).json({ error: 'Geçersiz avatar seçimi.' });
@@ -1931,6 +1936,20 @@ app.post('/api/lab/oku', girisGerekli, pdfSinirlayici, pdfGovdesi, async (req, r
       return res.status(400).json({ error: 'PDF gövdesi boş. Content-Type: application/pdf olmalı.' });
     }
     const sonuc = await tahlilAyristir(req.body);
+
+    // TAHLİL DIŞI PDF'LERİ BURADA DURDURUYORUZ.
+    // Ayrıştırıcı istemeden de olsa "etiket + sayı" gören her satırı test
+    // sanabiliyor; özgeçmiş, fatura ya da ders programı yüklendiğinde ekran
+    // anlamsız satırlarla doluyordu. Denetim ayrıştırıcıda (saf fonksiyon,
+    // testleri T20-T24) yapılıyor, burada yalnızca sonucu uygulanıyor.
+    if (!sonuc.rapor.uygun) {
+      return res.status(400).json({
+        error: 'Bu dosya bir tahlil raporuna benzemiyor: içinde birim ya da '
+          + 'referans aralığı taşıyan ölçüm satırı bulunamadı. Lütfen yalnızca '
+          + 'kan veya idrar tahlili sonucunuzun PDF dosyasını yükleyin.',
+      });
+    }
+
     const testler = sonuc.testler.map((t) => {
       const y = pdfYorumu(t);
       return {

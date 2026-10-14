@@ -466,7 +466,7 @@ const AvatarSecimi = ({ user, onGuncelle }) => {
     }
   };
 
-  const secenekler = [{ kod: null, ad: 'Baş harfler', Ciz: null }, ...AVATARLAR];
+  const secenekler = [{ kod: null, ad: 'Baş harfler' }, ...AVATARLAR];
 
   return (
     <div className="bg-white rounded-3xl border border-gray-200 p-8">
@@ -577,10 +577,12 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
           seçili" diye duyuruyor. Ok tuşlarıyla gezinme de desenin parçası;
           onsuz klavye kullanıcısı her sekmeye ayrı ayrı Tab'lamak zorunda
           kalır. Yalnızca seçili sekme Tab sırasında (roving tabindex). */}
+      {/* px-0.5: kaydırma kutusunun iç kenarında birkaç piksel pay; seçili
+          sekmenin alt çizgisi tam kenara denk geldiğinde kırpık görünüyordu. */}
       <div
         role="tablist"
         aria-label="Profil bölümleri"
-        className="flex gap-1 mb-8 border-b border-gray-200 overflow-x-auto"
+        className="flex gap-1 mb-8 border-b border-gray-200 overflow-x-auto px-0.5"
       >
         {SEKMELER.map((sk, i) => {
           const secili = sekme === sk.kod;
@@ -603,7 +605,7 @@ export const ProfileScreen = ({ user, onGuncelle, meta, onSilindi }) => {
                 if (sekmeRef.current[sonraki]) sekmeRef.current[sonraki].focus();
               }}
               className={`flex items-center gap-2 px-5 py-3 font-bold text-sm whitespace-nowrap border-b-2 -mb-px transition
-                focus:outline-none focus:ring-2 focus:ring-green-500 rounded-t-lg
+                focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-inset rounded-t-lg
                 ${secili
                   ? 'border-green-700 text-green-700'
                   : 'border-transparent text-gray-600 hover:text-gray-800 hover:border-gray-300'}`}

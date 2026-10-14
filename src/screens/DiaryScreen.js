@@ -120,15 +120,17 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
         <span className="text-gray-500 font-bold">{toplam} kcal</span>
       </div>
 
+      {/* Satırlar flex-wrap: dar ekranda ad üstte, sayaç ve kalori altta.
+          Tek satırda zorlamak kartı ekranın dışına taşırıyordu. */}
       {kalemler.length > 0 && (
         <ul className="mb-4 space-y-2">
           {kalemler.map((k) => (
-            <li key={k.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5">
+            <li key={k.id} className="flex flex-wrap items-center justify-between gap-y-2 bg-gray-50 rounded-xl px-4 py-2.5">
               <span className="text-sm text-gray-700 flex items-center gap-2 min-w-0">
                 {k.icon && <span>{k.icon}</span>}
                 <span className="truncate">{k.ad}</span>
                 {k.adet ? (
-                  <span className="text-gray-500 shrink-0">
+                  <span className="text-gray-500 shrink-0 hidden sm:inline">
                     · {k.adet} × {k.porsiyonAdi} ({Math.round(k.amount)} g)
                   </span>
                 ) : null}
@@ -152,7 +154,7 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
                     >+</button>
                   </span>
                 ) : null}
-                <span className="text-sm font-bold text-gray-600 w-20 text-right">{k.kcal} kcal</span>
+                <span className="text-sm font-bold text-gray-600 min-w-[3.5rem] text-right tabular-nums">{k.kcal} kcal</span>
                 <button
                   onClick={() => onSil(k.id)} disabled={kilitli}
                   className="text-gray-500 hover:text-red-500 transition disabled:opacity-40"
@@ -179,14 +181,14 @@ const OgunSatiri = ({ ogunKey, kalemler, onEkle, onSil, onAdet, kilitli }) => {
             onChange={(e) => setArama(e.target.value)}
             placeholder="Besin ara (ör. yoğurt) veya aşağıdan kalori gir"
             aria-label="Besin ara"
-            className="p-3 outline-none text-sm w-full min-w-0 bg-transparent rounded-lg focus:ring-2 focus:ring-green-500 focus:ring-inset"
+            className="p-3 outline-none text-sm w-full min-w-0 flex-1 bg-transparent rounded-lg focus:ring-2 focus:ring-green-500 focus:ring-inset"
           />
           {araniyor && <Loader2 size={16} className="animate-spin text-gray-500 shrink-0" />}
           <span className="flex items-center gap-1 shrink-0 border-l pl-3">
             <input
               type="number" min="0.5" step="0.5" value={adet}
               onChange={(e) => setAdet(e.target.value)}
-              className="w-14 p-2 text-sm text-center outline-none bg-transparent rounded-lg focus:ring-2 focus:ring-green-500 focus:ring-inset"
+              className="w-10 sm:w-14 p-2 text-sm text-center outline-none bg-transparent rounded-lg focus:ring-2 focus:ring-green-500 focus:ring-inset"
               aria-label="Kaç porsiyon"
             />
             <span className="text-xs text-gray-500 pr-1">adet</span>
@@ -314,12 +316,26 @@ export const DiaryScreen = () => {
   const suDegistir = (fark) => islem(() => api.gunlukGunGuncelle(gun, {
     waterL: Math.max(0, Number(((veri ? veri.suL : 0) + fark).toFixed(1))),
   }));
-  const aktiviteEkle = () => {
+  /**
+   * Yakılan kaloriyi artırır ya da azaltır.
+   *
+   * NİYE AZALTMA DA VAR: önce yalnızca ekleme vardı. Yanlış bir sayı
+   * girildiğinde geri almanın hiçbir yolu yoktu; kullanıcı o günün verisini
+   * düzeltemiyordu. Su sayacında zaten "+" ve "−" ikilisi var, aynı desen
+   * buraya da taşındı.
+   *
+   * Math.max(0, ...): eksiye düşmüyor. Sunucu da aynı sınırı uyguluyor
+   * (PUT /api/diary/:gun), yani arayüz atlansa bile eksi değer yazılamaz.
+   */
+  const aktiviteDegistir = (yon) => {
     const sayi = Number(aktiviteGirdi);
     if (!(sayi > 0)) return;
-    islem(() => api.gunlukGunGuncelle(gun, { burnedKcal: (veri ? veri.yakilanKcal : 0) + sayi }))
+    const mevcut = veri ? veri.yakilanKcal : 0;
+    islem(() => api.gunlukGunGuncelle(gun, { burnedKcal: Math.max(0, mevcut + yon * sayi) }))
       .then(() => setAktiviteGirdi(''));
   };
+
+  const aktiviteSifirla = () => islem(() => api.gunlukGunGuncelle(gun, { burnedKcal: 0 }));
 
   const gunDegistir = (fark) => {
     const d = new Date(`${gun}T00:00:00Z`);
@@ -337,6 +353,25 @@ export const DiaryScreen = () => {
     // Pazartesi = 0 olacak şekilde kaydır (JS'te Pazar = 0)
     const bosluk = (ilkGun.getUTCDay() + 6) % 7;
     const ozet = new Map((ayVerisi ? ayVerisi.gunler : []).map((g) => [g.gun, g]));
+
+    /* AYLIK ORTALAMA
+     *
+     * PAYDA, AYIN GÜN SAYISI DEĞİL "KAYIT GİRİLEN GÜN SAYISI".
+     * Ayın tamamına bölseydik, ayın 5'inde bakan biri 30'a bölünmüş bir
+     * sayı görür ve "çok az yemişim" diye yanlış bir sonuç çıkarırdı. Bu bir
+     * sağlık uygulaması; yanıltıcı bir ortalama hiç ortalama olmamasından
+     * kötü. Hangi paydanın kullanıldığı kullanıcıya da yazılıyor.
+     *
+     * "Kayıt girilen gün" = üç değerden en az biri sıfırdan büyük olan gün.
+     */
+    const kayitliGunler = [...ozet.values()]
+      .filter((g) => g.alinanKcal > 0 || g.yakilanKcal > 0 || g.suL > 0);
+    const ortalama = (sec) => (kayitliGunler.length
+      ? kayitliGunler.reduce((t, g) => t + sec(g), 0) / kayitliGunler.length
+      : 0);
+    const ortAlinan = Math.round(ortalama((g) => g.alinanKcal));
+    const ortYakilan = Math.round(ortalama((g) => g.yakilanKcal));
+    const ortSu = ortalama((g) => g.suL);
 
     return (
       <div className="p-6 sm:p-10 max-w-[1200px] mx-auto">
@@ -358,6 +393,45 @@ export const DiaryScreen = () => {
               <ArrowLeft size={18} /> Güne Dön
             </button>
           </div>
+        </div>
+
+        {/* AYLIK ORTALAMA ÖZETİ */}
+        <div className="bg-white rounded-3xl border shadow-sm p-6 mb-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+            <h2 className="text-lg font-bold text-gray-800">Aylık ortalama</h2>
+            <span className="text-xs text-gray-500">
+              {kayitliGunler.length > 0
+                ? `${kayitliGunler.length} gün kayıt girilmiş, ortalamalar bu günlere göre`
+                : 'Bu ayda henüz kayıt yok'}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-3 sm:gap-6">
+            {/* Sayı ve birim AYRI satırda: tek satırda "1630 kcal" dar ekranda
+                ikiye bölünüp "kcal" alt satıra düşüyordu, kötü duruyordu. */}
+            {[
+              { ad: 'Alınan', sayi: ortAlinan, birim: 'kcal', renk: 'bg-blue-600' },
+              { ad: 'Yakılan', sayi: ortYakilan, birim: 'kcal', renk: 'bg-green-500' },
+              { ad: 'Su', sayi: ortSu.toFixed(1), birim: 'litre', renk: 'bg-yellow-500' },
+            ].map((o) => (
+              <div key={o.ad} className="min-w-0">
+                <span className="flex items-center gap-2 text-xs font-medium text-gray-500">
+                  {/* Renk tek başına bilgi taşımıyor, yanında adı da yazılı (WCAG 1.4.1) */}
+                  <span className={`w-3 h-3 rounded-full shrink-0 ${o.renk}`} aria-hidden="true" />
+                  <span className="truncate">{o.ad}</span>
+                </span>
+                <span className="block mt-1 text-xl sm:text-2xl font-bold text-gray-800 tabular-nums leading-tight">
+                  {o.sayi}
+                </span>
+                <span className="block text-xs text-gray-500">{o.birim}</span>
+              </div>
+            ))}
+          </div>
+          {kayitliGunler.length > 0 && (
+            <p className="mt-4 text-xs text-gray-500 leading-relaxed">
+              Ortalamaya yalnızca kayıt girdiğiniz günler katılıyor; boş günler
+              sayıyı aşağı çekmiyor.
+            </p>
+          )}
         </div>
 
         <div className="bg-white rounded-3xl border shadow-sm p-6 sm:p-10">
@@ -438,7 +512,7 @@ export const DiaryScreen = () => {
         </div>
       ) : (
         <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-5">
+          <div className="lg:col-span-2 space-y-5 min-w-0">
             {['kahvalti', 'ogle', 'aksam', 'ara'].map((o) => (
               <OgunSatiri
                 key={o} ogunKey={o} kalemler={kalemleri(o)}
@@ -454,21 +528,46 @@ export const DiaryScreen = () => {
                   <div>
                     <h3 className="font-bold text-xl text-gray-800">Aktivite</h3>
                     <span className="text-sm text-gray-500">{veri ? veri.yakilanKcal : 0} kcal yakıldı</span>
+                    {/* Sıfırla yalnızca sıfırdan büyükken görünüyor: yapacak
+                        bir şeyi olmayan düğme kalabalık yapar. Onay kutusu
+                        yok, çünkü işlem geri alınabilir (tekrar girilebilir)
+                        ve veri kaybı değil. */}
+                    {veri && veri.yakilanKcal > 0 && (
+                      <button
+                        type="button"
+                        onClick={aktiviteSifirla}
+                        disabled={kilitli}
+                        className="block mt-1 text-xs font-bold text-green-700 hover:text-green-900 underline disabled:opacity-40"
+                      >
+                        Sıfırla
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Footprints size={20} className="text-gray-500" />
-                  <Bike size={20} className="text-gray-500" />
+                <div className="flex items-center gap-2 min-w-0">
+                  <Footprints size={20} className="text-gray-500 shrink-0 hidden sm:block" aria-hidden="true" />
+                  <Bike size={20} className="text-gray-500 shrink-0" aria-hidden="true" />
                   <input
                     type="number" min="1" value={aktiviteGirdi}
                     onChange={(e) => setAktiviteGirdi(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && aktiviteEkle()}
-                    placeholder="yakılan kalori"
-                    className="p-3 border rounded-xl outline-none text-sm w-36 focus:border-green-500 transition"
+                    onKeyDown={(e) => e.key === 'Enter' && aktiviteDegistir(1)}
+                    placeholder="kalori"
+                    aria-label="Yakılan kalori miktarı"
+                    className="p-3 border rounded-xl outline-none text-sm w-24 min-w-0 focus:border-green-500 transition"
                   />
-                  <button onClick={aktiviteEkle} disabled={kilitli || !(Number(aktiviteGirdi) > 0)}
-                    className="bg-green-700 text-white p-3 rounded-xl hover:bg-green-800 active:scale-95 transition disabled:opacity-40">
-                    <Plus size={20} />
+                  <button
+                    onClick={() => aktiviteDegistir(-1)}
+                    disabled={kilitli || !(Number(aktiviteGirdi) > 0)}
+                    className="w-11 h-11 shrink-0 rounded-xl bg-white border text-gray-700 font-bold text-xl hover:bg-gray-50 active:scale-95 transition disabled:opacity-40"
+                    aria-label="Girilen kadar azalt"
+                  >−</button>
+                  <button
+                    onClick={() => aktiviteDegistir(1)}
+                    disabled={kilitli || !(Number(aktiviteGirdi) > 0)}
+                    className="w-11 h-11 shrink-0 rounded-xl bg-green-700 text-white font-bold hover:bg-green-800 active:scale-95 transition disabled:opacity-40 flex items-center justify-center"
+                    aria-label="Girilen kadar artır"
+                  >
+                    <Plus size={20} aria-hidden="true" />
                   </button>
                 </div>
               </div>
@@ -493,7 +592,7 @@ export const DiaryScreen = () => {
           </div>
 
           {/* Günün özeti */}
-          <div className="bg-white rounded-3xl border p-8 h-fit lg:sticky lg:top-6 shadow-sm">
+          <div className="bg-white rounded-3xl border p-8 h-fit lg:sticky lg:top-6 shadow-sm min-w-0">
             <h2 className="text-xl font-bold mb-6 pb-4 border-b">Günün Özeti</h2>
 
             <div className="w-56 h-56 mx-auto mb-8 relative flex items-center justify-center">

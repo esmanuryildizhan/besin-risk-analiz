@@ -377,7 +377,9 @@ export const LabResultsScreen = () => {
         <div>
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">Tahlil Sonuçlarım</h1>
           <p className="text-gray-500">
-            Tahlil sonucunuzu PDF olarak yükleyin. Sonuçlar okunur, siz onaylarsınız, sonra kaydedilir.
+            Yalnızca kan ya da idrar tahlili sonucunuzun PDF dosyasını yükleyin.
+            Sonuçlar okunur, siz onaylarsınız, sonra kaydedilir. Tahlil olmayan
+            belgeler kabul edilmiyor.
           </p>
         </div>
         <div className="mb-5"><DemoUyarisi /></div>

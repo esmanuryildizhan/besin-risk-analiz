@@ -23,6 +23,16 @@ const EN_FAZLA = 200;   // bcrypt 72 bayttan sonrasını yok sayıyor; ayrıca
                         // sınırsız girdi kabul etmek DoS yüzeyi
 
 const HARF = /\p{L}/u;
+// BÜYÜK ve KÜÇÜK harf ayrı ayrı aranıyor.
+// \p{Lu} / \p{Ll} Unicode sınıfları: Türkçe'nin dört ayrı harfi de doğru
+// sınıflanıyor (İ ve I büyük, i ve ı küçük). [A-Z] yazılsaydı "ŞİFRE1!"
+// büyük harf içermiyor sayılırdı.
+//
+// BİLİNEN SINIRI: Arapça, İbranice gibi büyük/küçük ayrımı olmayan
+// alfabelerde bu şart hiç karşılanamaz. Uygulamanın dili Türkçe olduğu için
+// kabul edilen bir bedel; çok dilli bir sürümde bu kural gözden geçirilmeli.
+const BUYUK_HARF = /\p{Lu}/u;
+const KUCUK_HARF = /\p{Ll}/u;
 const RAKAM = /\p{Nd}/u;
 // Sembol = harf, rakam ve boşluk DIŞINDAKİ her görünür karakter.
 // Beyaz liste yazılsaydı (!@#$...) Türkçe klavyedeki ₺ gibi karakterler
@@ -96,6 +106,8 @@ function parolaDenetle(parola, kisi = {}) {
   if (p.length < EN_AZ) ekle('uzunluk', `En az ${EN_AZ} karakter olmalı.`);
   if (p.length > EN_FAZLA) ekle('cokUzun', `En fazla ${EN_FAZLA} karakter olabilir.`);
   if (!HARF.test(p)) ekle('harf', 'En az bir harf içermeli.');
+  if (HARF.test(p) && !BUYUK_HARF.test(p)) ekle('buyukharf', 'En az bir büyük harf içermeli.');
+  if (HARF.test(p) && !KUCUK_HARF.test(p)) ekle('kucukharf', 'En az bir küçük harf içermeli.');
   if (!RAKAM.test(p)) ekle('rakam', 'En az bir rakam içermeli.');
   if (!SEMBOL.test(p)) ekle('sembol', 'En az bir sembol içermeli (ör. ! ? * - .).');
   if (p && !cesitlilikYeterliMi(p)) {

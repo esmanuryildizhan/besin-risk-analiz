@@ -47,8 +47,8 @@
 //         kullanıcıya görünüyordu. Ad konusundaki hukuki uyarı için
 //         VERI_SORUMLUSU sabitinin başındaki nota bakın.
 //   1.4 — saklama ve imha politikası eklendi (bölüm 5).
-const SURUM = '1.5';
-const SURUM_TARIHI = '7 Ekim 2026';
+const SURUM = '1.6';
+const SURUM_TARIHI = '14 Ekim 2026';
 
 // Veri sorumlusunun iletişim adresi. KVKK m.10/a ve GDPR m.13(1)(a) bunu
 // zorunlu kılıyor: kullanıcı haklarını kullanmak için başvuracak bir adres
@@ -198,9 +198,8 @@ silebilirsiniz.
 
 ## 9. Veri Sorumlusu ve İletişim
 
-Besin Risk Analiz Sistemi, İstanbul Beykent Üniversitesi'nde bir öğrenci
-projesi olarak geliştirilmiştir. Üniversite bu proje bakımından veri
-sorumlusu değildir.
+Besin Risk Analiz Sistemi bağımsız bir öğrenci projesidir; herhangi bir
+kurum, şirket ya da üniversite adına geliştirilmemiştir.
 
 Kanun kapsamında veri sorumlusu: ${VERI_SORUMLUSU}
 İletişim: ${ILETISIM}

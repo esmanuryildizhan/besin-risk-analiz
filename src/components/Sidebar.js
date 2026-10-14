@@ -57,7 +57,8 @@ export const Sidebar = ({ aktif, git, user, cikisYap, acik, setAcik, onTanitim }
           <Menu size={24} aria-hidden="true" />
           <span className="sr-only">Menüyü aç</span>
         </button>
-        <span className="font-bold text-gray-800">Besin Risk Analiz</span>
+        {/* leading-tight: ad iki satıra düşerse satırlar birbirine girmesin */}
+        <span className="font-bold text-gray-800 leading-tight">Besin Risk Analiz Sistemi</span>
       </div>
 
       {/* Perde: çekmece açıkken içeriği örtüyor */}

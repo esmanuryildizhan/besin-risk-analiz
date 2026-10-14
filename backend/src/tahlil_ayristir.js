@@ -368,7 +368,68 @@ function satirlariAyristir(satirlar) {
     }
   });
 
-  return { tarih, testler: tekil, uyarilar };
+  return {
+    tarih,
+    testler: tekil,
+    uyarilar,
+    rapor: tahlilRaporuMu(tekil, satirlar),
+  };
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   BU DOSYA GERÇEKTEN BİR TAHLİL RAPORU MU?
+   ──────────────────────────────────────────────────────────────────────────
+
+   YAŞANMIŞ DURUM: kullanıcı tahlil yerine başka bir PDF (bir özgeçmiş)
+   yükledi. Ayrıştırıcı "etiket + sayı" gördüğü her satırı test sanıp içeri
+   aldı; ekranda "15:00", "Referans aralığı PDF'te yok" gibi satırlar belirdi.
+   Hiçbiri sağlık verisi değildi ama arayüz onları kaydedilebilir sonuç gibi
+   gösteriyordu. Bir sağlık uygulamasında bu sadece çirkin değil, tehlikeli:
+   kullanıcı kaydeder, sonra o veriye göre değerlendirme görür.
+
+   AYIRT EDİCİ ÖLÇÜT "ÖLÇÜM SATIRI":
+   Gerçek bir tahlil satırında sayısal bir sonucun yanında ya BİRİM
+   ("mg/dL", "g/dL") ya da REFERANS ARALIĞI ("70-100") bulunur. Özgeçmişteki
+   bir saat ya da bir yıl sayısının ikisi de yoktur. Ölçütü "sayı var mı"
+   değil "sayı + birim/aralık var mı" diye kurmak ikisini ayırıyor.
+
+   EŞİK NİYE 3:
+   Tek bir ölçüm satırı rastlantı olabilir (faturadaki "12,5 kg" gibi). Üç
+   tanesi bir arada ancak bir ölçüm tablosunda bulunur. Tek testlik meşru
+   raporları (yalnızca D vitamini istenmiş olabilir) dışarıda bırakmamak için
+   ikinci bir yol var: en az bir ölçüm satırı VE belgede tahlile özgü bir
+   anahtar kelime.
+
+   ANAHTAR KELİMELER DAR SEÇİLDİ: yalnız "referans" yazmıyor, "referans
+   aralığı" yazıyor. Özgeçmişlerde "Referanslar" başlığı sık geçiyor; iki
+   sözcüklü biçim geçmiyor.
+*/
+const ANAHTAR_KELIMELER = [
+  'referans aralığı', 'referans araligi', 'tahlil', 'laboratuvar', 'laboratuar',
+  'hemogram', 'biyokimya', 'tetkik', 'e-nabız', 'enabiz', 'numune',
+];
+
+/** Sayısal sonucu olan ve yanında birim ya da aralık taşıyan satır. */
+function olcumSatiriMi(t) {
+  if (!t || t.deger === null || t.deger === undefined) return false;
+  return Boolean(t.birim)
+    || t.refAlt !== null || t.refUst !== null
+    || Boolean(t.siniflar && t.siniflar.length);
+}
+
+/**
+ * @returns {{uygun: boolean, olcum: number, anahtar: boolean}}
+ */
+function tahlilRaporuMu(testler, satirlar) {
+  const olcum = (testler || []).filter(olcumSatiriMi).length;
+  const metin = (satirlar || [])
+    .map((s) => (s.parcalar || []).map((p) => p.s).join(' '))
+    .join('\n')
+    // Türkçe yerele göre küçültme şart: varsayılan küçültmede "TAHLİL"
+    // noktalı bir i'ye dönüşüp aramada eşleşmiyor.
+    .toLocaleLowerCase('tr');
+  const anahtar = ANAHTAR_KELIMELER.some((x) => metin.includes(x));
+  return { uygun: olcum >= 3 || (olcum >= 1 && anahtar), olcum, anahtar };
 }
 
 /**
@@ -400,6 +461,7 @@ function pdfYorumu(test) {
 
 module.exports = {
   tahlilAyristir, satirlariAyristir, kisiselBilgiMi, sureSinirli,
+  tahlilRaporuMu, olcumSatiriMi,
   EN_FAZLA_SAYFA,
   pdfYorumu, araligaUyuyorMu, referansiCoz, degeriCoz,
 };
