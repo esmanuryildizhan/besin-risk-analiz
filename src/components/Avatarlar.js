@@ -37,6 +37,24 @@ export const AVATARLAR = [
   { kod: 'buyukbaba', ad: 'Büyükbaba' },
   { kod: 'buyukanne', ad: 'Büyükanne' },
   { kod: 'basortuluBuyukanne', ad: 'Başörtülü büyükanne' },
+  { kod: 'yasliAdamSebze', ad: 'Alışveriş poşetli yaşlı adam' },
+  { kod: 'sporcuKadin', ad: 'Suluklu sporcu kadın' },
+  { kod: 'laborantAdam', ad: 'Beyaz önlüklü adam' },
+  { kod: 'basortuluTelefon', ad: 'Telefonuna bakan başörtülü kadın' },
+  { kod: 'gencAdamShaker', ad: 'Shaker tutan genç adam' },
+  { kod: 'tabletliKadin', ad: 'Tablet tutan kadın' },
+  { kod: 'asciAdamSepet', ad: 'Önlüklü sepetli adam' },
+  { kod: 'orguluKiz', ad: 'Örgülü saçlı meyveli kız' },
+  { kod: 'ekoseAdamListe', ad: 'Ekose gömlekli adam' },
+  { kod: 'panoluKadin', ad: 'Pano tutan kadın' },
+  { kod: 'sakalliAdamElma', ad: 'Elma tutan sakallı adam' },
+  { kod: 'laborantKadin', ad: 'Beyaz önlüklü kadın' },
+  { kod: 'gencAdamSirtCantasi', ad: 'Sırt çantalı genç adam' },
+  { kod: 'basortuluGulumseyen', ad: 'Gülümseyen başörtülü kadın' },
+  { kod: 'yasliKadinSebze', ad: 'Alışveriş poşetli yaşlı kadın' },
+  { kod: 'basortuluBej', ad: 'Bej başörtülü kadın' },
+  { kod: 'gencAdamSalata', ad: 'Salata tutan genç adam' },
+  { kod: 'kizilKadinTelefon', ad: 'Telefonlu kızıl saçlı kadın' },
 ];
 
 /** Baş harfler: avatar seçilmemişse ya da görsel yüklenemezse. */
@@ -62,7 +80,9 @@ const BasHarfler = ({ ad, soyad, boyut, className }) => (
  *     kalmasın diye.
  *  3. Her şey yolunda           -> resim.
  */
-export const Avatar = ({ kod, ad, soyad, boyut = 80, className = '' }) => {
+export const Avatar = ({
+  kod, ad, soyad, boyut = 80, className = '', dekoratif = false,
+}) => {
   const [yuklenemedi, setYuklenemedi] = useState(false);
   const secili = AVATARLAR.find((a) => a.kod === kod);
 
@@ -73,12 +93,20 @@ export const Avatar = ({ kod, ad, soyad, boyut = 80, className = '' }) => {
   return (
     <img
       src={`${KLASOR}/${secili.kod}.png`}
-      // alt: ekran okuyucu "Büyükanne avatarı" diyor. Boş bırakılsaydı bazı
-      // okuyucular dosya adını heceleyecekti.
-      alt={`${secili.ad} avatarı`}
+      /* alt: ekran okuyucu "Büyükanne avatarı" diyor. Boş bırakılsaydı bazı
+         okuyucular dosya adını heceleyecekti.
+
+         dekoratif=true: resim BAŞKA bir metnin yanında duruyor demek. Avatar
+         seçim ekranında her seçeneğin zaten gizli bir adı var; alt da
+         doluysa ekran okuyucu adı iki kez söylüyor. Orada resim süs. */
+      alt={dekoratif ? '' : `${secili.ad} avatarı`}
       width={boyut}
       height={boyut}
       style={{ width: boyut, height: boyut }}
+      // 27 avatar var ve hepsi yalnızca seçim ekranında görünüyor.
+      // lazy olmasaydı o sekme açılınca 27 resim birden inerdi.
+      loading="lazy"
+      decoding="async"
       onError={() => setYuklenemedi(true)}
       className={`rounded-full object-cover select-none ${className}`}
       draggable="false"

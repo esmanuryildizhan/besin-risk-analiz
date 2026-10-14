@@ -477,13 +477,21 @@ const AvatarSecimi = ({ user, onGuncelle }) => {
         <legend className="text-xs font-bold text-gray-500 mb-4 block uppercase">
           Yan menüde görünecek simge
         </legend>
-        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+        {/* AD YAZILMIYOR.
+            Resmin altına "Başörtülü büyükanne" gibi bir etiket yazmak hem
+            kalabalık yapıyordu hem de kullanıcıya kendini bir kalıba
+            sokuyormuş gibi geliyordu. Ad yalnızca ekran okuyucuya gidiyor
+            (sr-only): görme engelli bir kullanıcı seçenekleri yine de
+            ayırt edebilmeli, yoksa 28 adet "resim" duyar.
+            Etiket gidince hücreler küçüldü, sütun sayısı arttı. */}
+        <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-3">
           {secenekler.map(({ kod, ad }) => {
             const secili = (user.avatar || null) === kod;
             return (
               <label
                 key={kod || 'bosluk'}
-                className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 cursor-pointer transition
+                title={ad}
+                className={`flex items-center justify-center p-1.5 rounded-2xl border-2 cursor-pointer transition
                   ${secili ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'}
                   ${bekleyen === kod ? 'opacity-50' : ''}`}
               >
@@ -491,10 +499,8 @@ const AvatarSecimi = ({ user, onGuncelle }) => {
                   type="radio" name="avatar" value={kod || ''} checked={secili}
                   onChange={() => sec(kod)} className="sr-only"
                 />
-                <Avatar kod={kod} ad={user.name} soyad={user.surname} boyut={52} />
-                <span className={`text-xs text-center leading-tight ${secili ? 'font-bold text-green-700' : 'text-gray-600'}`}>
-                  {ad}
-                </span>
+                <span className="sr-only">{ad}</span>
+                <Avatar kod={kod} ad={user.name} soyad={user.surname} boyut={52} dekoratif />
               </label>
             );
           })}

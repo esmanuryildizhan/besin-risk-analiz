@@ -1305,6 +1305,12 @@ app.put('/api/me', girisGerekli, async (req, res) => {
       'gencAdam', 'gencKadin', 'basortuluGenc',
       'sakalliAdam', 'gozlukluKadin', 'basortuluKadin',
       'buyukbaba', 'buyukanne', 'basortuluBuyukanne',
+      'yasliAdamSebze', 'sporcuKadin', 'laborantAdam',
+      'basortuluTelefon', 'gencAdamShaker', 'tabletliKadin',
+      'asciAdamSepet', 'orguluKiz', 'ekoseAdamListe',
+      'panoluKadin', 'sakalliAdamElma', 'laborantKadin',
+      'gencAdamSirtCantasi', 'basortuluGulumseyen', 'yasliKadinSebze',
+      'basortuluBej', 'gencAdamSalata', 'kizilKadinTelefon',
     ];
     if (avatar !== undefined && avatar !== null && !AVATARLAR.includes(avatar)) {
       return res.status(400).json({ error: 'Geçersiz avatar seçimi.' });
